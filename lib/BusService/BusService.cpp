@@ -51,7 +51,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
   String url = "https://api.tmb.cat/v1/itransit/bus/parades/" + stopCode +
                "?app_id=" + appId + "&app_key=" + appKey;
 
-  Serial.println("Fetching Combined Bus Data: " + url);
+  // Serial.println("Fetching Combined Bus Data: " + url);
   http.begin(client, url);
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
@@ -85,7 +85,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
     String stopName = p["nom_parada"].as<String>();
     if (stopName.length() > 0) {
       data.stopName = sanitize(stopName);
-      Serial.println("Stop Name (Updated): " + data.stopName);
+      // Serial.println("Stop Name (Updated): " + data.stopName);
     }
 
     data.arrivals.clear();
@@ -131,7 +131,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
               });
 
     http.end();
-    Serial.println("DEBUG: Bus Data Updated (Returning True)");
+    // Serial.println("DEBUG: Bus Data Updated (Returning True)");
     return true;
   } else {
     Serial.print("Error code: ");

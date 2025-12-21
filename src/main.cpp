@@ -11,7 +11,6 @@
 #include <WiFi.h>
 #include <lvgl.h>
 
-
 // Hardware Pins (Touch)
 #define TOUCH_SDA 33
 #define TOUCH_SCL 32
@@ -45,7 +44,7 @@ void my_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     data->state = LV_INDEV_STATE_PR;
     data->point.x = x;
     data->point.y = y;
-    Serial.printf("LVGL IN: x=%d, y=%d\n", x, y); // Debug input to LVGL
+    // Serial.printf("LVGL IN: x=%d, y=%d\n", x, y); // Removed debug
   } else {
     data->state = LV_INDEV_STATE_REL;
   }
@@ -137,7 +136,7 @@ void networkTask(void *parameter) {
     // 3. Update Bus (Every 60s)
     // 3. Update Bus (Every 60s)
     if (now - lastBusUpdate > 60000 || triggerBusFetch) {
-      Serial.println("NETWORK: Updating Bus...");
+      // Serial.println("NETWORK: Updating Bus...");
       BusData tempBus;
       // Use configured bus stop
       if (BusService::updateBusTimes(tempBus, NetworkManager::getBusStop(),
@@ -280,7 +279,7 @@ void loop() {
     xSemaphoreGive(dataMutex);
 
     if (shouldShow) {
-      Serial.println("Redrawing Weather Screen (Update Ready)...");
+      // Serial.println("Redrawing Weather Screen (Update Ready)...");
       GuiController::showWeatherScreen(localWeather, 0);
     }
   }
@@ -289,7 +288,7 @@ void loop() {
   if (GuiController::isBusScreenActive()) {
     // On bus screen: update bus frequently
     if (now - lastBusUpdate > 60000) { // Check every 60s
-      Serial.println("Triggering background Bus update...");
+      // Serial.println("Triggering background Bus update...");
       triggerBusFetch = true;
       lastBusUpdate = now;
     }
@@ -306,7 +305,7 @@ void loop() {
 
     // Weather Fetch Trigger
     if (now - lastWeatherUpdate > 600000) { // 10 mins
-      Serial.println("Triggering background Weather update...");
+      // Serial.println("Triggering background Weather update...");
       triggerWeatherFetch = true;
       lastWeatherUpdate = now;
     }

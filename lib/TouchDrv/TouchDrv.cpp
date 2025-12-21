@@ -85,7 +85,8 @@ bool TouchDrv::read(int16_t *x, int16_t *y) {
     return false;
   }
 
-  Serial.printf("TOUCH RAW: num=%d, raw_x=%d, raw_y=%d\n", fingerNum, _x, _y);
+  // Serial.printf("TOUCH RAW: num=%d, raw_x=%d, raw_y=%d\n", fingerNum, _x,
+  // _y);
 
   // Invert/Map logic for 240x320
   // User reported reverse scroll. Adjusting mapping.

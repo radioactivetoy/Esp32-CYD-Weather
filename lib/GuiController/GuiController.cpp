@@ -34,7 +34,7 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
   tft.endWrite();
 
   if (flush_count++ % 100 == 0) {
-    Serial.printf("HEARTBEAT: Flush #%u\n", flush_count);
+    // Serial.printf("HEARTBEAT: Flush #%u\n", flush_count);
   }
 
   lv_disp_flush_ready(disp);
@@ -100,7 +100,7 @@ void GuiController::update() {
 
 void GuiController::drawLoadingScreen(const char *msg) {
   // Make sure we are on the main thread (called from loop -> update)
-  Serial.printf("DEBUG: Drawing Loading Screen: %s\n", msg ? msg : "NULL");
+  // Serial.printf("DEBUG: Drawing Loading Screen: %s\n", msg ? msg : "NULL");
 
   lv_obj_t *scr = lv_scr_act();
   lv_obj_clean(scr);
@@ -208,8 +208,8 @@ static void toggle_forecast_cb(lv_event_t *e) {
 void GuiController::handleGesture(lv_event_t *e) {
   lv_obj_t *screen = lv_event_get_target(e);
   lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
-  Serial.printf("DEBUG: Gesture Detected! Dir=%d, on Object=0x%p\n", dir,
-                screen);
+  // Serial.printf("DEBUG: Gesture Detected! Dir=%d, on Object=0x%p\n", dir,
+  // screen);
 
   if (dir == LV_DIR_LEFT) {
     if (forecastMode < 3) {
@@ -223,11 +223,11 @@ void GuiController::handleGesture(lv_event_t *e) {
     }
   } else if (dir == LV_DIR_TOP) {
     // Swipe UP: Show Bus Screen
-    Serial.println("DEBUG: Swipe UP -> Bus Screen");
+    // Serial.println("DEBUG: Swipe UP -> Bus Screen");
     showBusScreen(cachedBus, 2);
   } else if (dir == LV_DIR_BOTTOM) {
     // Swipe DOWN: Refresh
-    Serial.println("DEBUG: Swipe DOWN -> Refresh");
+    // Serial.println("DEBUG: Swipe DOWN -> Refresh");
     // Force Weather Screen via main logic? Or just switch back
     showWeatherScreen(cachedWeather, -2);
   }
@@ -236,7 +236,7 @@ void GuiController::handleGesture(lv_event_t *e) {
 void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
   busScreenActive = false;
   uint32_t tStart = millis();
-  Serial.println("DEBUG: GuiController::showWeatherScreen START");
+  // Serial.println("DEBUG: GuiController::showWeatherScreen START");
 
   // Update Cache (if not self)
   if (&data != &cachedWeather) {
@@ -633,9 +633,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
   int time = (anim == 0) ? 0 : 300;
   lv_scr_load_anim(new_scr, anim_type, time, 0, true);
 
-  Serial.printf("DEBUG: GuiController::showWeatherScreen LOAD ANIM (Render "
-                "Time: %lu ms)\n",
-                millis() - tStart);
+  // Serial.printf("DEBUG: GuiController::showWeatherScreen LOAD ANIM (Render
+  // Time: %lu ms)\n", millis() - tStart);
 }
 
 const char *GuiController::getWeatherDesc(int code) {
@@ -699,9 +698,9 @@ lv_color_t GuiController::getBusLineColor(const String &line,
 
 void GuiController::showBusScreen(const BusData &data, int anim) {
   uint32_t tStart = millis();
-  Serial.printf("DEBUG: GuiController::showBusScreen START (Data: %d buses)\n",
-                data.arrivals.size());
-  Serial.printf("DEBUG: GUI StopName: '%s'\n", data.stopName.c_str());
+  // Serial.printf("DEBUG: GuiController::showBusScreen START (Data: %d
+  // buses)\n", data.arrivals.size()); Serial.printf("DEBUG: GUI StopName:
+  // '%s'\n", data.stopName.c_str());
 
   busScreenActive = true;
 
@@ -883,9 +882,9 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
   } else {
     lv_scr_load_anim(new_scr, anim_type, 300, 0, true);
   }
-  Serial.printf(
+  /* Serial.printf(
       "DEBUG: GuiController::showBusScreen LOAD ANIM (Render Time: %lu ms)\n",
-      millis() - tStart);
+      millis() - tStart); */
 }
 
 void GuiController::updateTime() {
