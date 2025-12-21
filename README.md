@@ -6,9 +6,9 @@ A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Y
 
 -   **Real-Time Weather**: Current temperature, humidity, wind, and AQI (Air Quality Index).
 -   **Forecasts**: Swipe to see Hourly (24h) and Daily (7-day) forecasts.
--   **Bus Arrivals**: Real-time arrival estimates for your favorite TMB bus stop. Includes accurate colors for V/H/D lines.
+-   **Bus Arrivals**: Real-time arrival estimates for your favorite BarcelonaTMB bus stop. Includes accurate colors for V/H/D lines.
 -   **Smart Clock**: Syncs automatically with internet time (NTP).
--   **Web Configuration**: Configure City, Bus Stop, and API Keys directly from your browser.
+-   **Web Configuration**: Configure For Weather, Bus Stop Code, and TMB API Keys directly from your browser.
 -   **Gestures**:
     -   **Swipe UP**: Switch to Bus Screen.
     -   **Swipe LEFT/RIGHT**: Cycle Weather views (Current -> Hourly -> Daily -> Trends).
