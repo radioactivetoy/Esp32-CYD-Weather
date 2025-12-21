@@ -122,6 +122,12 @@ void NetworkManager::begin() {
   }
   Serial.println("NETWORK: WiFi Connected!");
 
+  // Init NTP
+  configTime(3600, 3600, "pool.ntp.org"); // GMT+1 + Daylight Saving
+  // More specific for Barcelona:
+  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+  tzset();
+
   if (shouldSaveConfig) {
     Serial.println("NETWORK: Saving New Config...");
     city = custom_city.getValue();
