@@ -163,27 +163,33 @@ void GuiController::createWeatherIcon(lv_obj_t *parent, int code) {
   const void *src = &weather_icon_cloud;     // Default
   lv_color_t color = lv_color_hex(0xFFFFFF); // Default White
 
-  if (code == 0 || code == 1) {
+  if (code == 0) {
     src = &weather_icon_sun;
     color = lv_color_hex(0xFFD700); // Gold
-  } else if (code == 2 || code == 3) {
+  } else if (code == 1 || code == 2) {
+    src = &weather_icon_part_cloud;
+    color = lv_color_hex(0xFFEEAA); // Light Yellow/White
+  } else if (code == 3) {
     src = &weather_icon_cloud;
     color = lv_color_hex(0xEEEEEE); // Light Grey
-  } else if (code >= 45 && code <= 48) {
-    src = &weather_icon_cloud;
-    color = lv_color_hex(0xAAAAAA); // Fog Grey
-  } else if (code >= 51 && code <= 67) {
-    src = &weather_icon_rain;       // Drizzle/Rain
-    color = lv_color_hex(0x00BFFF); // Blue
+  } else if (code == 45 || code == 48) {
+    src = &weather_icon_fog;
+    color = lv_color_hex(0xAAAAAA); // Grey
+  } else if (code >= 51 && code <= 55) {
+    src = &weather_icon_drizzle;
+    color = lv_color_hex(0xADD8E6); // Light Blue
+  } else if (code >= 61 && code <= 67) {
+    src = &weather_icon_rain;
+    color = lv_color_hex(0x00BFFF); // Deep Sky Blue
   } else if (code >= 71 && code <= 77) {
     src = &weather_icon_snow;
-    color = lv_color_hex(0xE0FFFF); // Cyan
+    color = lv_color_hex(0xE0FFFF); // Light Cyan
   } else if (code >= 80 && code <= 82) {
-    src = &weather_icon_rain; // Showers
-    color = lv_color_hex(0x00BFFF);
+    src = &weather_icon_showers;
+    color = lv_color_hex(0x1E90FF); // Dodger Blue
   } else if (code >= 85 && code <= 86) {
     src = &weather_icon_snow;
-    color = lv_color_hex(0xE0FFFF);
+    color = lv_color_hex(0xE0FFFF); // Light Cyan
   } else if (code >= 95) {
     src = &weather_icon_thunder;
     color = lv_color_hex(0x9370DB); // Purple

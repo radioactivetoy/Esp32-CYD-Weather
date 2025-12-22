@@ -15,7 +15,11 @@ TRANSPARENT_KEY = (0, 255, 0)  # Standard Green for chroma key
 # URL MAP
 ICON_URLS = {
     "weather_icon_sun": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-day-sunny.svg',
+    "weather_icon_part_cloud": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-day-cloudy.svg',
     "weather_icon_cloud": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-cloud.svg',
+    "weather_icon_fog": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-fog.svg',
+    "weather_icon_drizzle": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-sprinkle.svg',
+    "weather_icon_showers": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-showers.svg',
     "weather_icon_rain": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-rain.svg',
     "weather_icon_snow": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-snow.svg',
     "weather_icon_thunder": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-thunderstorm.svg',
