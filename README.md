@@ -2,26 +2,44 @@
 
 A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Yellow Display). It shows real-time weather from Open-Meteo, TMB (Transports Metropolitans de Barcelona) bus arrival times, and Stock/Crypto prices.
 
-## Features
+## 🎮 Controls & Navigation
 
--   **Real-Time Weather**: Current temperature, humidity, wind, and AQI (Air Quality Index).
--   **Forecasts**: Swipe to see Hourly (24h) and Daily (7-day) forecasts.
--   **Bus Arrivals**: Real-time arrival estimates for your favorite Barcelona TMB bus stop. Includes accurate colors for V/H/D lines.
--   **Stock Ticker**: Track US Stocks (e.g., AAPL) and Crypto (e.g., BTC-USD) in real-time via Finnhub.
--   **LED Weather Alerts**: RGB LED indicates rain forecast (Red=Rain, Orange=Soon, Yellow=Later, Green=Clear).
--   **Smart Clock**: Syncs automatically with internet time (NTP).
--   **Web Configuration**: Configure all settings (WiFi, Keys, Location, LED, Night Mode) from your browser.
--   **Global Navigation**: Circular app cycling (Weather ↔️ Stocks ↔️ Bus).
+The interface relies on intuitive **Touch Gestures**:
 
-## Navigation (Gestures)
+| Action | Gesture | Function |
+| :--- | :--- | :--- |
+| **Switch App** | **Swipe UP / DOWN** | Cycle between **Weather** ↔ **Bus** ↔ **Crypto/Stocks** |
+| **Switch Page** | **Swipe LEFT / RIGHT** | **Weather**: Next/Prev City <br> **Bus**: Next/Prev Bus Stop |
+| **Toggle View** | **Tap Screen** | **Weather**: Cycle Views (Current → Hourly → Daily → Graph) |
+| **Refresh Data** | **Auto / Swipe Entry** | **Bus**: Auto-refreshes on entry (Instant) & every 60s <br> **Stock**: 5 min |
 
-**Switching Apps (Vertical Swipes)**:
--   **Swipe UP**: Next App (Weather -> Stocks -> Bus -> Weather).
--   **Swipe DOWN**: Previous App (Weather -> Bus -> Stocks -> Weather).
+## ✨ Features (Polished)
 
-**Inside Weather App**:
--   **Tap Screen**: Toggle View (Cycle: Current -> Hourly -> Daily -> Graph).
--   **Swipe LEFT/RIGHT**: Switch Cities (if multiple configured).
+1.  **Multi-City Weather**:
+    *   **Current**: Design-foward "Glassmorphism" card with Pills (Humidity, Wind, AQI).
+    *   **Hourly**: Scrollable list of 24h forecast.
+    *   **Daily**: 7-Day forecast with high/low temps.
+    *   **Graph**: 24h Temperature Trend visualization.
+    *   **Unified Header**: Clean 40px Header (Title Left, Time Right) matches all apps.
+
+2.  **TMB Bus Tracker**:
+    *   **Real-time Arrivals**: Shows minutes/seconds remaining.
+    *   **Color Coded**:
+        *   🔴 Arriving Now (< 2 min) - *Pulses!*
+        *   🟡 Approaching (< 5 min)
+        *   🟢 Free Flow (> 5 min)
+    *   **Optimized Header**: Max-width stop name with background watermarked icon.
+    *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen.
+
+3.  **Stock/Crypto Ticker**:
+    *   **Real-time Prices**: Yahoo Finance API.
+    *   **Trend Tracking**: Green/Red indicators for price changes.
+    *   **Clean List**: Scrollable view of all configured symbols.
+
+4.  **Hardware Support**:
+    *   **Display**: CYD (Cheap Yellow Display) - ESP32-2432S024C.
+    *   **Touch**: CST816S Capacitive Touch (Gestures + Taps).
+    *   **Sensor**: LDR (Light Dependent Resistor) for Auto-Brightness.
 
 ## Hardware
 

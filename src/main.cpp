@@ -326,7 +326,7 @@ void updateBacklight() {
   const int DAY_PWM = 255;
   const int NIGHT_PWM = 20;
 
-  if (millis() - last_check > 5000) {
+  if (millis() - last_check > 360000) {
     last_check = millis();
     struct tm timeinfo;
     int target_pwm = DAY_PWM;
