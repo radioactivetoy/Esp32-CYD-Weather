@@ -56,6 +56,16 @@ void GuiController::setBusStopCount(int count) { busStopCount = count; }
 bool GuiController::hasBusStationChanged() { return busStationChanged; }
 void GuiController::clearBusStationChanged() { busStationChanged = false; }
 
+// City State
+int GuiController::currentCityIndex = 0;
+int GuiController::cityCount = 1;
+bool GuiController::cityChanged = false;
+
+int GuiController::getCityIndex() { return currentCityIndex; }
+void GuiController::setCityCount(int count) { cityCount = count; }
+bool GuiController::hasCityChanged() { return cityChanged; }
+void GuiController::clearCityChanged() { cityChanged = false; }
+
 bool GuiController::isBusScreenActive() { return currentApp == APP_BUS; }
 void GuiController::updateBusCache(const BusData &data) { cachedBus = data; }
 
@@ -210,19 +220,13 @@ void formatDate(const char *input, char *output) {
 // Toggle State: 0: Current, 1: Hourly, 2: Daily, 3: Trends Graph
 static int forecastMode = 0;
 
-static void toggle_forecast_cb(lv_event_t *e) {
-  void *ptr = lv_event_get_user_data(e);
-  if (!ptr) {
-    Serial.println("FATAL ERROR: toggle_forecast_cb user_data is NULL!");
-    return;
-  }
-  forecastMode = (forecastMode + 1) % 4;
-  const WeatherData *data = (const WeatherData *)ptr;
-  GuiController::showWeatherScreen(*data);
-}
+// Removed duplicate forecastMode
+
+// Removed toggle_forecast_cb (Unsafe pointer usage)
 
 void GuiController::handleGesture(lv_event_t *e) {
   lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+  Serial.printf("DEBUG: Gesture Dir: %d, App: %d\n", dir, currentApp);
 
   // --- CIRCULAR NAVIGATION (Up/Down) ---
   if (dir == LV_DIR_TOP) {
@@ -247,24 +251,39 @@ void GuiController::handleGesture(lv_event_t *e) {
   // --- INTERNAL VIEWS (Left/Right) ---
   else if (dir == LV_DIR_LEFT) {
     if (currentApp == APP_WEATHER) {
-      forecastMode = (forecastMode + 1) % 3;
-      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+      Serial.printf("DEBUG: Weather Left. Count: %d, Index: %d\n", cityCount,
+                    currentCityIndex);
+      if (cityCount > 1) {
+        currentCityIndex = (currentCityIndex + 1) % cityCount;
+        cityChanged = true;
+      }
     } else if (currentApp == APP_BUS && busStopCount > 1) {
       // Cycle Bus Stops
       currentBusIndex = (currentBusIndex + 1) % busStopCount;
       busStationChanged = true;
-      // Removed blocking loading screen to make swipe smoother
     }
   } else if (dir == LV_DIR_RIGHT) {
     if (currentApp == APP_WEATHER) {
-      forecastMode = (forecastMode + 2) % 3; // -1 equivalent
-      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+      Serial.printf("DEBUG: Weather Right. Count: %d, Index: %d\n", cityCount,
+                    currentCityIndex);
+      if (cityCount > 1) {
+        currentCityIndex = (currentCityIndex - 1 + cityCount) % cityCount;
+        cityChanged = true;
+      }
     } else if (currentApp == APP_BUS && busStopCount > 1) {
       // Cycle Bus Stops
       currentBusIndex = (currentBusIndex - 1 + busStopCount) % busStopCount;
       busStationChanged = true;
-      // Removed blocking loading screen
     }
+  }
+}
+
+// New Click Handler for View Toggling
+void GuiController::handleScreenClick(lv_event_t *e) {
+  if (currentApp == APP_WEATHER) {
+    Serial.println("DEBUG: Screen Clicked -> Switching View");
+    forecastMode = (forecastMode + 1) % 4; // Cycle 0-3
+    showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_FADE_ON);
   }
 }
 
@@ -278,9 +297,12 @@ void GuiController::showStockScreen(const std::vector<StockItem> &data,
   }
 
   lv_obj_t *new_scr = lv_obj_create(NULL);
-  // Attach Gesture Handler
+  // Attach Gesture Handler to Screen
   lv_obj_add_event_cb(new_scr, handleGesture, LV_EVENT_GESTURE, NULL);
+  lv_obj_add_event_cb(new_scr, handleScreenClick, LV_EVENT_CLICKED,
+                      NULL); // New Tap Handler
 
+  // Create Main Container (Stack)
   lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
 
@@ -422,8 +444,7 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
 
   // Make screen clickable to toggle view
   lv_obj_add_flag(bg_grad, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(bg_grad, toggle_forecast_cb, LV_EVENT_CLICKED,
-                      (void *)&data);
+  lv_obj_add_event_cb(bg_grad, handleScreenClick, LV_EVENT_CLICKED, NULL);
 
   // --- ATTACH GESTURE HANDLER ---
   lv_obj_add_event_cb(new_scr, handleGesture, LV_EVENT_GESTURE, NULL);
@@ -624,7 +645,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
 
     // Header
     lv_obj_t *header = lv_label_create(bg_grad);
-    lv_label_set_text(header, isHourly ? "Hourly Forecast" : "7-Day Outlook");
+    String headerText = data.cityName + (isHourly ? " - Hourly" : " - 7 Days");
+    lv_label_set_text(header, headerText.c_str());
     lv_obj_set_style_text_font(header, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(header, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 10);
@@ -638,10 +660,14 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(list, 0, 0);
     lv_obj_set_style_pad_all(list, 0, 0);
+    // Enable bubbling so clicks reach the background handler
+    // lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE); // REMOVED
+    lv_obj_add_event_cb(list, handleScreenClick, LV_EVENT_CLICKED, NULL);
+    // scrolling
     // Add event to list to allow scrolling BUT capture clicks if not
     // scrolling
-    lv_obj_add_event_cb(list, toggle_forecast_cb, LV_EVENT_CLICKED,
-                        (void *)&data);
+    // lv_obj_add_event_cb(list, toggle_forecast_cb, LV_EVENT_CLICKED, (void
+    // *)&data);
 
     int count = isHourly ? 24 : 7;
     for (int i = 0; i < count; i++) {
@@ -733,7 +759,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     // or rely on the global bg_grad click (already set at top)
 
     lv_obj_t *title = lv_label_create(bg_grad);
-    lv_label_set_text(title, "24h Temperature");
+    String titleText = data.cityName + " - 24h Temp";
+    lv_label_set_text(title, titleText.c_str());
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
@@ -744,8 +771,12 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_style_bg_color(chart, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(chart, LV_OPA_50, 0);
     lv_obj_set_style_border_width(chart, 0, 0);
-    lv_obj_add_event_cb(chart, toggle_forecast_cb, LV_EVENT_CLICKED,
-                        (void *)&data);
+    lv_obj_set_style_border_width(chart, 0, 0);
+    // Bubble clicks to background to ensure view toggling works
+    // lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE); // REMOVED
+    lv_obj_add_event_cb(chart, handleScreenClick, LV_EVENT_CLICKED, NULL);
+    // lv_obj_add_event_cb(chart, toggle_forecast_cb, LV_EVENT_CLICKED, (void
+    // *)&data);
 
     // Axis
     lv_obj_set_style_pad_left(chart, 40, 0);

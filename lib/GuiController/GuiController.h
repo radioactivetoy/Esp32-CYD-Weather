@@ -33,6 +33,15 @@ public:
   static bool hasBusStationChanged();
   static void clearBusStationChanged();
 
+  // Multi-City Support
+  static int currentCityIndex;
+  static int cityCount;
+  static bool cityChanged;
+  static int getCityIndex();
+  static void setCityCount(int count);
+  static bool hasCityChanged();
+  static void clearCityChanged();
+
 private:
   // static bool busScreenActive; // Replaced by currentApp
   // static bool stockScreenActive; // Replaced by currentApp
@@ -55,4 +64,5 @@ private:
 
   static const char *getWeatherDesc(int code);
   static void handleGesture(lv_event_t *e);
+  static void handleScreenClick(lv_event_t *e); // New
 };

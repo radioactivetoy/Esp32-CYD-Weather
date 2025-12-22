@@ -29,6 +29,7 @@ public:
   static String getLedBrightness();
   static std::vector<String>
   getBusStops(); // New: Split "2156,1234" // low, medium, high
+  static std::vector<String> getCities(); // New: Split "Barcelona,Madrid"
 
   // Legacy method if used
   static bool isConnected() { return WiFi.status() == WL_CONNECTED; }

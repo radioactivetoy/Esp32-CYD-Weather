@@ -89,19 +89,49 @@ void networkTask(void *parameter) {
   }
 
   // --- FIX: Initial Weather Fetch ---
-  Serial.println("NETWORK: Fetching Initial Weather...");
-  WeatherData tempWeather;
-  if (WeatherService::updateWeather(tempWeather, lat, lon)) {
-    tempWeather.cityName = (resolvedName.length() > 0) ? resolvedName : city;
 
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
-    weatherData = tempWeather;
-    LedController::update(weatherData); // Update LED
-    xSemaphoreGive(dataMutex);
-    Serial.println("NETWORK: Initial Weather Fetched Successfully.");
-  } else {
-    Serial.println("NETWORK: Failed to fetch initial weather.");
+  // 1. Initial City Setup
+  std::vector<String> cities = NetworkManager::getCities();
+  GuiController::setCityCount(cities.size());
+
+  struct CityWeatherCache {
+    String cityName;
+    WeatherData data;
+    uint32_t lastUpdate;
+    bool hasData;
+  };
+  std::vector<CityWeatherCache> cityCaches(cities.size());
+  for (size_t i = 0; i < cities.size(); i++) {
+    cityCaches[i].cityName = cities[i];
+    cityCaches[i].lastUpdate = 0;
+    cityCaches[i].hasData = false;
   }
+
+  // 2. Fetch Primary City Immediately (Index 0)
+  Serial.printf("NETWORK: Fetching Primary City: %s\n", cities[0].c_str());
+  WeatherData tempWeather;
+  float pLat, pLon;
+  String pResolved;
+
+  bool primarySuccess = false;
+  if (WeatherService::lookupCoordinates(cities[0], pLat, pLon, pResolved)) {
+    if (WeatherService::updateWeather(tempWeather, pLat, pLon)) {
+      tempWeather.cityName = (pResolved.length() > 0) ? pResolved : cities[0];
+
+      cityCaches[0].data = tempWeather;
+      cityCaches[0].hasData = true;
+      cityCaches[0].lastUpdate = millis();
+
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      weatherData = tempWeather;
+      LedController::update(weatherData); // LED linked to Primary
+      xSemaphoreGive(dataMutex);
+      primarySuccess = true;
+    }
+  }
+
+  if (!primarySuccess)
+    Serial.println("NETWORK: Failed initial primary fetch.");
   // ----------------------------------
 
   // Initial Bus Setup
@@ -126,28 +156,86 @@ void networkTask(void *parameter) {
   for (;;) {
     uint32_t now = millis();
 
-    // 2. Update Weather (Every 10 mins)
-    if (now - lastWeatherUpdate > 600000 || triggerWeatherFetch) {
-      Serial.println("NETWORK: Updating Weather...");
+    // --- WEATHER LOGIC (Multi-City) ---
+    // 1. Check if we need to fetch ANY city
+    int targetCityIndex = GuiController::getCityIndex();
+    bool citySwitched = GuiController::hasCityChanged();
+
+    // A. Always check Primary City (Index 0) for background update (every 10m)
+    if (now - cityCaches[0].lastUpdate > 600000) {
+      Serial.println("NETWORK: Updating Primary City (Background)...");
       WeatherData temp;
-      String currentCity = NetworkManager::getCity();
       float lat, lon;
-      String resolved;
-
-      // Resolve coords for current city
-      if (WeatherService::lookupCoordinates(currentCity, lat, lon, resolved)) {
+      String res;
+      if (WeatherService::lookupCoordinates(cityCaches[0].cityName, lat, lon,
+                                            res)) {
         if (WeatherService::updateWeather(temp, lat, lon)) {
-          temp.cityName = (resolved.length() > 0) ? resolved : currentCity;
+          temp.cityName = (res.length() > 0) ? res : cityCaches[0].cityName;
+          cityCaches[0].data = temp;
+          cityCaches[0].lastUpdate = now;
+          cityCaches[0].hasData = true;
 
+          // Update Global State (and LED)
           xSemaphoreTake(dataMutex, portMAX_DELAY);
-          weatherData = temp;
-          LedController::update(weatherData); // Update LED
-          weatherDataUpdated = true;
+          // If we are currently viewing primary city, push data to text
+          if (targetCityIndex == 0) {
+            weatherData = temp;
+            weatherDataUpdated = true;
+          }
+          // ALWAYS update LED based on Primary
+          LedController::update(temp);
           xSemaphoreGive(dataMutex);
         }
       }
-      lastWeatherUpdate = now;
-      triggerWeatherFetch = false;
+    }
+
+    // B. Check Active City (if not primary, or if explicit switch)
+    if (targetCityIndex >= 0 && targetCityIndex < cityCaches.size()) {
+      bool needFetch = false;
+
+      if (citySwitched) {
+        // If just switched, check cache
+        if (!cityCaches[targetCityIndex].hasData ||
+            (now - cityCaches[targetCityIndex].lastUpdate > 600000)) {
+          needFetch = true;
+        } else {
+          // Cache is good!
+          xSemaphoreTake(dataMutex, portMAX_DELAY);
+          weatherData = cityCaches[targetCityIndex].data;
+          weatherDataUpdated = true;
+          xSemaphoreGive(dataMutex);
+          GuiController::clearCityChanged();
+        }
+      } else if (!citySwitched && targetCityIndex != 0) {
+        // If sitting on a secondary city, update it periodically (10m)
+        if (now - cityCaches[targetCityIndex].lastUpdate > 600000) {
+          needFetch = true;
+        }
+      }
+
+      if (needFetch) {
+        Serial.printf("NETWORK: Fetching City %d: %s\n", targetCityIndex,
+                      cityCaches[targetCityIndex].cityName.c_str());
+        WeatherData temp;
+        float lat, lon;
+        String res;
+        if (WeatherService::lookupCoordinates(
+                cityCaches[targetCityIndex].cityName, lat, lon, res)) {
+          if (WeatherService::updateWeather(temp, lat, lon)) {
+            temp.cityName =
+                (res.length() > 0) ? res : cityCaches[targetCityIndex].cityName;
+            cityCaches[targetCityIndex].data = temp;
+            cityCaches[targetCityIndex].lastUpdate = now;
+            cityCaches[targetCityIndex].hasData = true;
+
+            xSemaphoreTake(dataMutex, portMAX_DELAY);
+            weatherData = temp;
+            weatherDataUpdated = true;
+            xSemaphoreGive(dataMutex);
+            GuiController::clearCityChanged();
+          }
+        }
+      }
     }
 
     // 3. Update Bus (Logic: Active Stop Only, >60s old)

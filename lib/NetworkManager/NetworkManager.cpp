@@ -35,6 +35,26 @@ std::vector<String> NetworkManager::getBusStops() {
   return stops;
 }
 
+std::vector<String> NetworkManager::getCities() {
+  std::vector<String> cities;
+  int start = 0;
+  while (start < city.length()) {
+    int comma = city.indexOf(',', start);
+    if (comma == -1)
+      comma = city.length();
+    String s = city.substring(start, comma);
+    s.trim();
+    if (s.length() > 0)
+      cities.push_back(s);
+    start = comma + 1;
+    if (cities.size() >= 5)
+      break; // Limit to 5 cities
+  }
+  if (cities.empty())
+    cities.push_back("Barcelona");
+  return cities;
+}
+
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
 
 void NetworkManager::handleClient() { server.handleClient(); }
@@ -43,7 +63,7 @@ void NetworkManager::handleRoot() {
   String html = "<html><head><title>Weather Clock Settings</title>";
   html +=
       "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-  html += "<style>body{font-family:sans-serif;max-width:500px;margin:20px "
+  html += "<style>body{font-family:sans-serif;max-width:500px;margin:20 "
           "auto;padding:20px;background:#1a1a1a;color:white;}";
   html += "input{width:100%;padding:10px;margin:5px 0;box-sizing:border-box;}";
   html += "input[type=submit]{background:#007bff;color:white;border:none;"
@@ -67,7 +87,8 @@ void NetworkManager::handleRoot() {
           "'><br><br>";
 
   // Improvements
-    html += "Timezone:<br><select name='timezone'>";
+  html += "<h3>Lighting</h3>";
+  html += "Timezone:<br><select name='timezone'>";
 
   struct TZ {
     const char *name;
@@ -137,7 +158,7 @@ void NetworkManager::handleRoot() {
     html += "<option value='" + String(tz.val) + "'" + selected + ">" +
             String(tz.name) + "</option>";
   }
-  html += "</select><br><br>";
+  html += "</select><br>";
 
   String checked = nightMode ? "checked" : "";
   html += "Night Mode (Auto-Dim): <input type='checkbox' name='nightMode' " +
@@ -250,7 +271,7 @@ void NetworkManager::begin() {
 
   // Custom Parameters
   // id/name, placeholder/prompt, default, length
-  WiFiManagerParameter custom_city("city", "City Name", city.c_str(), 32);
+  WiFiManagerParameter custom_city("city", "City Name", city.c_str(), 128);
   WiFiManagerParameter custom_busStop("busStop", "Bus Stop ID", busStop.c_str(),
                                       10);
   WiFiManagerParameter custom_appId("appId", "TMB App ID", savedAppId.c_str(),

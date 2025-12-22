@@ -58,9 +58,9 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
 
   int httpResponseCode = http.GET();
   if (httpResponseCode > 0) {
-    String payload = http.getString();
+    // Use Stream to save RAM
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
+    DeserializationError error = deserializeJson(doc, http.getStream());
 
     if (error) {
       Serial.print(F("deserializeJson() failed: "));

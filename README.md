@@ -20,7 +20,8 @@ A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Y
 -   **Swipe DOWN**: Previous App (Weather -> Bus -> Stocks -> Weather).
 
 **Inside Weather App**:
--   **Swipe LEFT/RIGHT**: Cycle Views (Current -> Hourly -> Daily).
+-   **Tap Screen**: Toggle View (Cycle: Current -> Hourly -> Daily -> Graph).
+-   **Swipe LEFT/RIGHT**: Switch Cities (if multiple configured).
 
 ## Hardware
 
