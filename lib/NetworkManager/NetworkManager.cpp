@@ -1,5 +1,4 @@
 #include "NetworkManager.h"
-#include "GuiController.h"
 #include <WiFiManager.h>
 
 Preferences NetworkManager::prefs;
@@ -10,6 +9,7 @@ String NetworkManager::timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
 bool NetworkManager::nightMode = false;
 int NetworkManager::nightStart = 22;
 int NetworkManager::nightEnd = 7;
+String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
 WebServer NetworkManager::server(80);
 
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
@@ -124,9 +124,13 @@ void NetworkManager::handleRoot() {
   html += "Night Start (Hour 0-23):<br><input type='number' name='nightStart' "
           "value='" +
           String(nightStart) + "'><br>";
-  html +=
-      "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
+  "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
       String(nightEnd) + "'><br><br>";
+
+  html += "<h3>Stock Ticker</h3>";
+  html += "Symbols (comma split):<br><input type='text' name='stockSymbols' "
+          "value='" +
+          stockSymbols + "'><br><br>";
 
   html += "<input type='submit' value='Save & Reboot'></form>";
   html += "<p>IP: " + WiFi.localIP().toString() + "</p>";
@@ -158,6 +162,10 @@ void NetworkManager::handleSave() {
     prefs.putInt("nightStart", nightStart);
     prefs.putInt("nightEnd", nightEnd);
 
+    // Stocks
+    stockSymbols = server.arg("stockSymbols");
+    prefs.putString("stockSymbols", stockSymbols);
+
     prefs.end();
 
     String html = "<html><head><meta http-equiv='refresh' "
@@ -177,13 +185,10 @@ void NetworkManager::configModeCallback(WiFiManager *myWiFiManager) {
   Serial.println(myWiFiManager->getConfigPortalSSID());
 
   char buf[64];
-  snprintf(buf, sizeof(buf), "AP Active: %s",
-           myWiFiManager->getConfigPortalSSID().c_str());
-
-  if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
-    GuiController::showLoadingScreen(buf);
-    xSemaphoreGive(dataMutex);
-  }
+  sprintf(buf, "Connect to AP:\n%s\nIP: 192.168.4.1",
+          myWiFiManager->getConfigPortalSSID().c_str());
+  // GuiController::showLoadingScreen(buf); // Decoupled to avoid circular dep
+  Serial.println(buf);
 }
 
 void NetworkManager::begin() {
@@ -199,6 +204,9 @@ void NetworkManager::begin() {
   nightMode = prefs.getBool("nightMode", false);
   nightStart = prefs.getInt("nightStart", 22);
   nightEnd = prefs.getInt("nightEnd", 7);
+
+  // Load Stocks
+  stockSymbols = prefs.getString("stockSymbols", "AAPL,BTC-USD,GRF.MC");
 
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);
@@ -296,3 +304,4 @@ String NetworkManager::getTimezone() { return timezone; }
 bool NetworkManager::getNightModeEnabled() { return nightMode; }
 int NetworkManager::getNightStart() { return nightStart; }
 int NetworkManager::getNightEnd() { return nightEnd; }
+String NetworkManager::getStockSymbols() { return stockSymbols; }

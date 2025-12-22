@@ -1,6 +1,7 @@
 #include "BusService.h"
 #include "GuiController.h"
 #include "NetworkManager.h"
+#include "StockService.h"
 #include "TouchDrv.h"
 #include "WeatherService.h"
 #include <Arduino.h>
@@ -23,14 +24,22 @@ BusData busData;
 SemaphoreHandle_t dataMutex;
 volatile bool busDataUpdated = false;
 volatile bool weatherDataUpdated = false;
-volatile bool triggerBusFetch = false;
-volatile bool triggerWeatherFetch = false;
-static uint32_t lastBusUpdate = 0;
-static uint32_t lastWeatherUpdate = 0;
+volatile bool pendingBusRedraw = false;
+bool pendingWeatherRedraw = false;
+bool triggerBusFetch = false;
+bool triggerWeatherFetch = false;
+bool triggerStockFetch = true; // Force initial fetch on boot
+
+// Timers
+uint32_t lastWeatherUpdate = 0;
+uint32_t lastBusUpdate = 0;
+uint32_t lastStockUpdate = 0;
+
+// Stock Data
+std::vector<StockItem> stockData;
+volatile bool stockDataUpdated = false;
 
 // Variables defining current view
-volatile bool pendingWeatherRedraw = false;
-volatile bool pendingBusRedraw = false;
 float lat = 0;
 float lon = 0;
 
@@ -148,7 +157,28 @@ void networkTask(void *parameter) {
         xSemaphoreGive(dataMutex);
       }
       lastBusUpdate = now; // Update timestamp
+      lastBusUpdate = now; // Update timestamp
       triggerBusFetch = false;
+    }
+
+    // 4. Update Stock (Every 5 mins)
+    if (now - lastStockUpdate > 300000 || triggerStockFetch) {
+      String syms = NetworkManager::getStockSymbols();
+
+      Serial.printf("MAIN: Checking Stock Update... Syms='%s'\n", syms.c_str());
+
+      if (syms.length() > 0) {
+        Serial.println("NETWORK: Updating Stocks (Yahoo)...");
+        std::vector<StockItem> items = StockService::getQuotes(syms);
+        if (!items.empty()) {
+          xSemaphoreTake(dataMutex, portMAX_DELAY);
+          stockData = items;
+          stockDataUpdated = true;
+          xSemaphoreGive(dataMutex);
+        }
+      }
+      lastStockUpdate = now;
+      triggerStockFetch = false;
     }
 
     // Handle Web Requests
@@ -284,6 +314,20 @@ void loop() {
     }
   }
 
+  if (stockDataUpdated) {
+    std::vector<StockItem> localStock;
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    localStock = stockData;
+    stockDataUpdated = false;
+    GuiController::updateStockCache(localStock);
+    bool shouldShow = GuiController::isStockScreenActive();
+    xSemaphoreGive(dataMutex);
+
+    if (shouldShow) {
+      GuiController::showStockScreen(localStock, 0);
+    }
+  }
+
   if (weatherDataUpdated) {
     WeatherData localWeather;
     xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -305,6 +349,12 @@ void loop() {
       // Serial.println("Triggering background Bus update...");
       triggerBusFetch = true;
       lastBusUpdate = now;
+    }
+  } else if (GuiController::isStockScreenActive()) {
+    // On stock screen: update frequently
+    if (now - lastStockUpdate > 60000) {
+      triggerStockFetch = true;
+      lastStockUpdate = now;
     }
   } else {
     // On weather screen: update clock and weather

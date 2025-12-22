@@ -25,6 +25,8 @@ public:
   static int getNightStart();
   static int getNightEnd();
 
+  static String getStockSymbols();
+
   // Legacy method if used
   static bool isConnected() { return WiFi.status() == WL_CONNECTED; }
 
@@ -37,6 +39,7 @@ private:
   static bool nightMode;
   static int nightStart;
   static int nightEnd;
+  static String stockSymbols;
   static bool shouldSaveConfig;
   static void saveConfigCallback();
   static void configModeCallback(WiFiManager *myWiFiManager);

@@ -1,5 +1,6 @@
 #include "GuiController.h"
 #include "BusService.h"
+#include "NetworkManager.h"
 #include "WeatherService.h"
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -78,6 +79,13 @@ static lv_obj_t *activeTimeLabel = NULL; // Track the time label
 // Data Cache
 WeatherData GuiController::cachedWeather;
 BusData GuiController::cachedBus;
+std::vector<StockItem> GuiController::cachedStock;
+bool GuiController::stockScreenActive = false;
+
+bool GuiController::isStockScreenActive() { return stockScreenActive; }
+void GuiController::updateStockCache(const std::vector<StockItem> &data) {
+  cachedStock = data;
+}
 
 void GuiController::showLoadingScreen(const char *msg) {
   // Just verify thread safety for string copy?
@@ -226,15 +234,116 @@ void GuiController::handleGesture(lv_event_t *e) {
     // Serial.println("DEBUG: Swipe UP -> Bus Screen");
     showBusScreen(cachedBus, 2);
   } else if (dir == LV_DIR_BOTTOM) {
-    // Swipe DOWN: Refresh
-    // Serial.println("DEBUG: Swipe DOWN -> Refresh");
-    // Force Weather Screen via main logic? Or just switch back
-    showWeatherScreen(cachedWeather, -2);
+    // Swipe DOWN: Stock Screen
+    showStockScreen(cachedStock, -2);
   }
+}
+
+void GuiController::showStockScreen(const std::vector<StockItem> &data,
+                                    int anim) {
+  busScreenActive = false;
+  stockScreenActive = true;
+
+  // Update Cache
+  if (&data != &cachedStock) {
+    cachedStock = data;
+  }
+
+  lv_obj_t *new_scr = lv_obj_create(NULL);
+  // Attach Gesture Handler
+  lv_obj_add_event_cb(new_scr, handleGesture, LV_EVENT_GESTURE, NULL);
+
+  lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
+
+  // Header
+  lv_obj_t *header = lv_obj_create(new_scr);
+  lv_obj_set_size(header, LV_PCT(100), 50);
+  lv_obj_set_style_bg_color(header, lv_color_hex(0x1A1A1A), 0);
+  lv_obj_set_style_border_width(header, 0, 0);
+  lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *title = lv_label_create(header);
+  lv_label_set_text(title, "Market Ticker");
+  lv_obj_set_style_text_color(title, lv_color_hex(0xFFD700), 0); // Gold
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+
+  // List
+  lv_obj_t *list = lv_obj_create(new_scr);
+  lv_obj_set_size(list, LV_PCT(100), 270);
+  lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(list, 0, 0);
+  lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE); // Important for swipes
+
+  if (data.empty()) {
+    lv_obj_t *lbl = lv_label_create(list);
+
+    String msg = "Loading...";
+    if (NetworkManager::getStockSymbols().length() == 0) {
+      msg = "No Symbols Configured";
+    } else {
+      msg = "No Data Received.\nCheck Network";
+    }
+
+    lv_label_set_text(lbl, msg.c_str());
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0x888888), 0);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
+  } else {
+    for (const auto &item : data) {
+      lv_obj_t *row = lv_obj_create(list);
+      lv_obj_set_size(row, LV_PCT(100), 60); // Compact height
+      lv_obj_set_style_bg_color(row, lv_color_hex(0x111111), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(0x333333), 0);
+      lv_obj_set_style_border_width(row, 1, 0);
+      lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+      // Symbol
+      lv_obj_t *sym = lv_label_create(row);
+      lv_label_set_text(sym, item.symbol.c_str());
+      lv_obj_set_style_text_color(sym, lv_color_hex(0xFFFFFF), 0);
+      lv_obj_set_style_text_font(sym, &lv_font_montserrat_16, 0);
+      lv_obj_align(sym, LV_ALIGN_LEFT_MID, 5, 0); // Vertically centered
+
+      // Price
+      lv_obj_t *price = lv_label_create(row);
+      char buf[32];
+      if (item.price < 1.0)
+        snprintf(buf, sizeof(buf), "$%.4f", item.price);
+      else
+        snprintf(buf, sizeof(buf), "$%.2f", item.price);
+      lv_label_set_text(price, buf);
+      lv_obj_set_style_text_color(price, lv_color_hex(0xEEEEEE), 0);
+      lv_obj_set_style_text_font(price, &lv_font_montserrat_24, 0);
+      lv_obj_align(price, LV_ALIGN_TOP_RIGHT, -5, 2); // Top Right
+
+      // Change
+      lv_obj_t *change = lv_label_create(row);
+      snprintf(buf, sizeof(buf), "%+.2f%%", item.changePercent);
+      lv_label_set_text(change, buf);
+      lv_color_t cColor = (item.changePercent >= 0) ? lv_color_hex(0x00FF00)
+                                                    : lv_color_hex(0xFF0000);
+      lv_obj_set_style_text_color(change, cColor, 0);
+      // Stack below Price, right aligned
+      lv_obj_align_to(change, price, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 0);
+    }
+  }
+
+  lv_scr_load_anim_t anim_type = LV_SCR_LOAD_ANIM_NONE;
+  if (anim == 2)
+    anim_type = LV_SCR_LOAD_ANIM_MOVE_BOTTOM; // From Top (Swipe Down)
+  else if (anim == -2)
+    anim_type = LV_SCR_LOAD_ANIM_MOVE_TOP; // From Bottom (Swipe Up)
+
+  lv_scr_load_anim(new_scr, anim_type, (anim == 0) ? 0 : 300, 0, true);
 }
 
 void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
   busScreenActive = false;
+  stockScreenActive = false;
   uint32_t tStart = millis();
   // Serial.println("DEBUG: GuiController::showWeatherScreen START");
 
@@ -703,6 +812,7 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
   // '%s'\n", data.stopName.c_str());
 
   busScreenActive = true;
+  stockScreenActive = false;
 
   // Update Cache
   if (&data != &cachedBus) {
