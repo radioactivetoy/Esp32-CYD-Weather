@@ -34,17 +34,16 @@ std::vector<StockItem> StockService::getQuotes(String symbols) {
       int httpCode = http.GET();
 
       if (httpCode > 0) {
-        String payload = http.getString();
-
+        // Correctly handle HTTP 200 OK
         if (httpCode == HTTP_CODE_OK) {
           JsonDocument doc;
-          // Filter data to save memory (Yahoo JSON is huge)
           // Filter data to save memory (Yahoo JSON is huge)
           JsonDocument filter;
           filter["chart"]["result"][0]["meta"] = true; // Capture all meta data
 
+          // STREAM PARSING: Read directly from socket (Low RAM usage)
           DeserializationError error = deserializeJson(
-              doc, payload, DeserializationOption::Filter(filter));
+              doc, http.getStream(), DeserializationOption::Filter(filter));
 
           if (!error) {
             JsonObject meta = doc["chart"]["result"][0]["meta"];
