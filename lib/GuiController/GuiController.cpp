@@ -47,6 +47,14 @@ static void opa_anim_cb(void *obj, int32_t v) {
 }
 
 GuiController::AppMode GuiController::currentApp = GuiController::APP_WEATHER;
+int GuiController::currentBusIndex = 0;
+int GuiController::busStopCount = 1;
+bool GuiController::busStationChanged = false;
+
+int GuiController::getBusIndex() { return currentBusIndex; }
+void GuiController::setBusStopCount(int count) { busStopCount = count; }
+bool GuiController::hasBusStationChanged() { return busStationChanged; }
+void GuiController::clearBusStationChanged() { busStationChanged = false; }
 
 bool GuiController::isBusScreenActive() { return currentApp == APP_BUS; }
 void GuiController::updateBusCache(const BusData &data) { cachedBus = data; }
@@ -216,34 +224,47 @@ static void toggle_forecast_cb(lv_event_t *e) {
 void GuiController::handleGesture(lv_event_t *e) {
   lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
 
-  if (dir == LV_DIR_LEFT || dir == LV_DIR_RIGHT) {
-    // Horizontal: Only for Internal Views (Currently only Weather)
+  // --- CIRCULAR NAVIGATION (Up/Down) ---
+  if (dir == LV_DIR_TOP) {
+    // UP: Weather -> Stocks -> Bus -> Weather
     if (currentApp == APP_WEATHER) {
-      if (dir == LV_DIR_LEFT && forecastMode < 3) {
-        forecastMode++;
-        showWeatherScreen(cachedWeather, 1);
-      } else if (dir == LV_DIR_RIGHT && forecastMode > 0) {
-        forecastMode--;
-        showWeatherScreen(cachedWeather, -1);
-      }
+      showStockScreen(cachedStock, LV_SCR_LOAD_ANIM_MOVE_TOP);
+    } else if (currentApp == APP_STOCK) {
+      showBusScreen(cachedBus, LV_SCR_LOAD_ANIM_MOVE_TOP);
+    } else if (currentApp == APP_BUS) {
+      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_TOP);
     }
-  } else if (dir == LV_DIR_TOP) {
-    // Swipe UP (Next App): Weather -> Stock -> Bus -> Weather
-    if (currentApp == APP_WEATHER)
-      showStockScreen(cachedStock, -2);
-    else if (currentApp == APP_STOCK)
-      showBusScreen(cachedBus, -2);
-    else if (currentApp == APP_BUS)
-      showWeatherScreen(cachedWeather, -2);
-
   } else if (dir == LV_DIR_BOTTOM) {
-    // Swipe DOWN (Prev App): Weather -> Bus -> Stock -> Weather
-    if (currentApp == APP_WEATHER)
-      showBusScreen(cachedBus, 2);
-    else if (currentApp == APP_STOCK)
-      showWeatherScreen(cachedWeather, 2);
-    else if (currentApp == APP_BUS)
-      showStockScreen(cachedStock, 2);
+    // DOWN: Weather -> Bus -> Stocks -> Weather
+    if (currentApp == APP_WEATHER) {
+      showBusScreen(cachedBus, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+    } else if (currentApp == APP_BUS) {
+      showStockScreen(cachedStock, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+    } else if (currentApp == APP_STOCK) {
+      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
+    }
+  }
+  // --- INTERNAL VIEWS (Left/Right) ---
+  else if (dir == LV_DIR_LEFT) {
+    if (currentApp == APP_WEATHER) {
+      forecastMode = (forecastMode + 1) % 3;
+      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_LEFT);
+    } else if (currentApp == APP_BUS && busStopCount > 1) {
+      // Cycle Bus Stops
+      currentBusIndex = (currentBusIndex + 1) % busStopCount;
+      busStationChanged = true;
+      // Removed blocking loading screen to make swipe smoother
+    }
+  } else if (dir == LV_DIR_RIGHT) {
+    if (currentApp == APP_WEATHER) {
+      forecastMode = (forecastMode + 2) % 3; // -1 equivalent
+      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
+    } else if (currentApp == APP_BUS && busStopCount > 1) {
+      // Cycle Bus Stops
+      currentBusIndex = (currentBusIndex - 1 + busStopCount) % busStopCount;
+      busStationChanged = true;
+      // Removed blocking loading screen
+    }
   }
 }
 
@@ -283,7 +304,8 @@ void GuiController::showStockScreen(const std::vector<StockItem> &data,
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(list, 0, 0);
-  lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE); // Important for swipes
+  lv_obj_add_flag(list,
+                  LV_OBJ_FLAG_GESTURE_BUBBLE); // Important for swipes
 
   if (data.empty()) {
     lv_obj_t *lbl = lv_label_create(list);
@@ -358,10 +380,10 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     cachedWeather = data;
   }
 
-  // Fix Memory Leak: Delete the previous screen after loading the new one?
-  // LVGL `lv_scr_load_anim` with `auto_del=true` handles this.
-  // But `lv_scr_load` does not.
-  // We can track the old screen and delete it, or just use anim with 0 time.
+  // Fix Memory Leak: Delete the previous screen after loading the new
+  // one? LVGL `lv_scr_load_anim` with `auto_del=true` handles this. But
+  // `lv_scr_load` does not. We can track the old screen and delete it, or
+  // just use anim with 0 time.
 
   lv_obj_t *act_scr = lv_scr_act();
 
@@ -375,7 +397,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
   lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
 
-  // Dynamic Weather Glow (Applies to all modes for consistency/atmosphere)
+  // Dynamic Weather Glow (Applies to all modes for
+  // consistency/atmosphere)
   uint32_t glow_color = 0x111111; // Default
   int code = data.currentWeatherCode;
   if (code == 0 || code == 1)
@@ -465,7 +488,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_size(icon_wrap, 60, 60);
     lv_obj_set_style_bg_opa(icon_wrap, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(icon_wrap, 0, 0);
-    lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE); // FIX SCROLLBARS
+    lv_obj_clear_flag(icon_wrap,
+                      LV_OBJ_FLAG_SCROLLABLE); // FIX SCROLLBARS
     createWeatherIcon(icon_wrap, data.currentWeatherCode);
     if (lv_obj_get_child(icon_wrap, 0))
       lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0), 256);
@@ -473,7 +497,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     // Temp Row (with Trend Arrows)
     // Temp Row (with Trend Arrows)
     lv_obj_t *temp_row = lv_obj_create(glass_card);
-    lv_obj_set_size(temp_row, LV_PCT(100), LV_SIZE_CONTENT); // Autosize height
+    lv_obj_set_size(temp_row, LV_PCT(100),
+                    LV_SIZE_CONTENT); // Autosize height
     lv_obj_set_style_bg_opa(temp_row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(temp_row, 0, 0);
     lv_obj_set_flex_flow(temp_row, LV_FLEX_FLOW_ROW);
@@ -488,10 +513,12 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     float diffL = data.daily[0].maxTemp - data.yesterdayMaxTemp;
     if (diffL >= 1.0) {
       lv_label_set_text(arrow_l, LV_SYMBOL_UP);
-      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0xFF5555), 0); // Red
+      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0xFF5555),
+                                  0); // Red
     } else if (diffL <= -1.0) {
       lv_label_set_text(arrow_l, LV_SYMBOL_DOWN);
-      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x5555FF), 0); // Blue
+      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x5555FF),
+                                  0); // Blue
     } else {
       lv_label_set_text(arrow_l, "-"); // Stable
       lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x888888), 0);
@@ -543,7 +570,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_flex_align(details_cont, LV_FLEX_ALIGN_SPACE_BETWEEN,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(details_cont, 0, 0);
-    lv_obj_clear_flag(details_cont, LV_OBJ_FLAG_SCROLLABLE); // Fix scrollbar
+    lv_obj_clear_flag(details_cont,
+                      LV_OBJ_FLAG_SCROLLABLE); // Fix scrollbar
 
     // Pill Macro (High Contrast)
     auto add_pill = [&](const char *label, const char *value, uint32_t color) {
@@ -610,7 +638,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(list, 0, 0);
     lv_obj_set_style_pad_all(list, 0, 0);
-    // Add event to list to allow scrolling BUT capture clicks if not scrolling
+    // Add event to list to allow scrolling BUT capture clicks if not
+    // scrolling
     lv_obj_add_event_cb(list, toggle_forecast_cb, LV_EVENT_CLICKED,
                         (void *)&data);
 
@@ -639,7 +668,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
         else
           lv_label_set_text(time_lbl, "--:--");
       } else {
-        // Just show date or day name if possible (we only have date string)
+        // Just show date or day name if possible (we only have date
+        // string)
         if (data.daily[i].date.length() > 0) {
           char dateBuf[32];
           formatDate(data.daily[i].date.c_str(), dateBuf);
@@ -655,7 +685,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
       lv_obj_set_style_bg_opa(icon_box, LV_OPA_TRANSP, 0);
       lv_obj_set_style_border_width(icon_box, 0, 0);
       lv_obj_set_style_pad_all(icon_box, 0, 0);
-      lv_obj_clear_flag(icon_box, LV_OBJ_FLAG_SCROLLABLE); // FIX SCROLLBARS
+      lv_obj_clear_flag(icon_box,
+                        LV_OBJ_FLAG_SCROLLABLE); // FIX SCROLLBARS
       createWeatherIcon(icon_box, isHourly ? data.hourly[i].weatherCode
                                            : data.daily[i].weatherCode);
       if (lv_obj_get_child(icon_box, 0))
@@ -748,8 +779,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
   int time = (anim == 0) ? 0 : 300;
   lv_scr_load_anim(new_scr, anim_type, time, 0, true);
 
-  // Serial.printf("DEBUG: GuiController::showWeatherScreen LOAD ANIM (Render
-  // Time: %lu ms)\n", millis() - tStart);
+  // Serial.printf("DEBUG: GuiController::showWeatherScreen LOAD ANIM
+  // (Render Time: %lu ms)\n", millis() - tStart);
 }
 
 const char *GuiController::getWeatherDesc(int code) {
@@ -802,6 +833,10 @@ lv_color_t GuiController::getBusLineColor(const String &line,
     return lv_color_hex(0x6FA628); // TMB Green
   } else if (line.startsWith("D")) {
     return lv_color_hex(0x8956A0); // TMB Purple
+  } else if (line.startsWith("X")) {
+    return lv_color_hex(0x000000); // Xpress Black
+  } else if (line.startsWith("N")) {
+    return lv_color_hex(0x002E6E); // NitBus Dark Blue
   } else if (line.length() <= 3 && line.toInt() != 0) {
     // Standard numerical lines
     return lv_color_hex(0xCC0000); // TMB Red
@@ -894,9 +929,10 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
   lv_obj_set_style_pad_row(list, 0, 0);
 
   // Attach Gesture to List so swipes work even over the list
-  // IMPORTANT: Allow bubbling so the screen-level handler (in main.cpp) sees
-  // it!
-  lv_obj_clear_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE); // Default is bubble? No.
+  // IMPORTANT: Allow bubbling so the screen-level handler (in main.cpp)
+  // sees it!
+  lv_obj_clear_flag(list,
+                    LV_OBJ_FLAG_GESTURE_BUBBLE); // Default is bubble? No.
   lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE);
 
   if (data.arrivals.empty()) {
@@ -998,8 +1034,8 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
     lv_scr_load_anim(new_scr, anim_type, 300, 0, true);
   }
   /* Serial.printf(
-      "DEBUG: GuiController::showBusScreen LOAD ANIM (Render Time: %lu ms)\n",
-      millis() - tStart); */
+      "DEBUG: GuiController::showBusScreen LOAD ANIM (Render Time: %lu
+     ms)\n", millis() - tStart); */
 }
 
 void GuiController::updateTime() {

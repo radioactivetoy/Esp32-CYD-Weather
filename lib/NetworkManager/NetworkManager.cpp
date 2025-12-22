@@ -15,6 +15,26 @@ WebServer NetworkManager::server(80);
 
 String NetworkManager::getLedBrightness() { return ledBrightness; }
 
+std::vector<String> NetworkManager::getBusStops() {
+  std::vector<String> stops;
+  int start = 0;
+  while (start < busStop.length()) {
+    int comma = busStop.indexOf(',', start);
+    if (comma == -1)
+      comma = busStop.length();
+    String s = busStop.substring(start, comma);
+    s.trim();
+    if (s.length() > 0)
+      stops.push_back(s);
+    start = comma + 1;
+    if (stops.size() >= 5)
+      break; // Limit to 5 stops
+  }
+  if (stops.empty())
+    stops.push_back("2156"); // Default
+  return stops;
+}
+
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
 
 void NetworkManager::handleClient() { server.handleClient(); }

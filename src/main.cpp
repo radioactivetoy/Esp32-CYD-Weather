@@ -104,14 +104,19 @@ void networkTask(void *parameter) {
   }
   // ----------------------------------
 
-  // Initial Fetch Bus
-  String stopId = NetworkManager::getBusStop();
-  if (BusService::updateBusTimes(busData, stopId,
-                                 NetworkManager::getAppId().c_str(),
-                                 NetworkManager::getAppKey().c_str())) {
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
-    busDataUpdated = true;
-    xSemaphoreGive(dataMutex);
+  // Initial Bus Setup
+  std::vector<String> stopIds = NetworkManager::getBusStops();
+  GuiController::setBusStopCount(stopIds.size());
+
+  struct BusStopCache {
+    String id;
+    BusData data;
+    uint32_t lastUpdate;
+  };
+  std::vector<BusStopCache> busCaches(stopIds.size());
+  for (size_t i = 0; i < stopIds.size(); i++) {
+    busCaches[i].id = stopIds[i];
+    busCaches[i].lastUpdate = 0;
   }
 
   // Request transition to Main Screen
@@ -145,23 +150,52 @@ void networkTask(void *parameter) {
       triggerWeatherFetch = false;
     }
 
-    // 3. Update Bus (Every 60s)
-    // 3. Update Bus (Every 60s)
-    if (now - lastBusUpdate > 60000 || triggerBusFetch) {
-      // Serial.println("NETWORK: Updating Bus...");
+    // 3. Update Bus (Logic: Active Stop Only, >60s old)
+    int targetIndex = GuiController::getBusIndex();
+    bool stationChanged = GuiController::hasBusStationChanged();
+
+    // Check if we need to fetch
+    bool needFetch = false;
+    if (targetIndex >= 0 && targetIndex < busCaches.size()) {
+      if (stationChanged) {
+        // If switching stations, trigger logic.
+        // If cache is fresh (<60s) AND valid, just show it. Otherwise fetch.
+        if (now - busCaches[targetIndex].lastUpdate > 60000 ||
+            busCaches[targetIndex].data.stopCode.isEmpty()) {
+          needFetch = true;
+        } else {
+          // Cache is good! Just push to UI
+          xSemaphoreTake(dataMutex, portMAX_DELAY);
+          busData = busCaches[targetIndex].data;
+          busDataUpdated = true;
+          xSemaphoreGive(dataMutex);
+          GuiController::clearBusStationChanged();
+        }
+      } else if (GuiController::isBusScreenActive()) {
+        // Periodic update for active screen
+        if (now - busCaches[targetIndex].lastUpdate > 60000) {
+          needFetch = true;
+        }
+      }
+    }
+
+    if (needFetch) {
+      String stopId = busCaches[targetIndex].id;
+      Serial.printf("NETWORK: Updating Bus Stop %s...\n", stopId.c_str());
       BusData tempBus;
-      // Use configured bus stop
-      if (BusService::updateBusTimes(tempBus, NetworkManager::getBusStop(),
+      if (BusService::updateBusTimes(tempBus, stopId,
                                      NetworkManager::getAppId().c_str(),
                                      NetworkManager::getAppKey().c_str())) {
+        busCaches[targetIndex].data = tempBus;
+        busCaches[targetIndex].lastUpdate = now;
+
         xSemaphoreTake(dataMutex, portMAX_DELAY);
         busData = tempBus;
         busDataUpdated = true;
         xSemaphoreGive(dataMutex);
+
+        GuiController::clearBusStationChanged();
       }
-      lastBusUpdate = now; // Update timestamp
-      lastBusUpdate = now; // Update timestamp
-      triggerBusFetch = false;
     }
 
     // 4. Update Stock (Every 5 mins)

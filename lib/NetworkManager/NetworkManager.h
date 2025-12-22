@@ -26,7 +26,9 @@ public:
   static int getNightEnd();
 
   static String getStockSymbols();
-  static String getLedBrightness(); // low, medium, high
+  static String getLedBrightness();
+  static std::vector<String>
+  getBusStops(); // New: Split "2156,1234" // low, medium, high
 
   // Legacy method if used
   static bool isConnected() { return WiFi.status() == WL_CONNECTED; }

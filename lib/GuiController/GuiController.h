@@ -24,6 +24,15 @@ public:
   enum AppMode { APP_WEATHER, APP_STOCK, APP_BUS };
   static AppMode currentApp;
 
+  // Multi-Bus Support
+  static int currentBusIndex;
+  static int busStopCount;
+  static bool busStationChanged;
+  static int getBusIndex();
+  static void setBusStopCount(int count);
+  static bool hasBusStationChanged();
+  static void clearBusStationChanged();
+
 private:
   // static bool busScreenActive; // Replaced by currentApp
   // static bool stockScreenActive; // Replaced by currentApp
