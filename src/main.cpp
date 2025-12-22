@@ -260,9 +260,11 @@ void networkTask(void *parameter) {
           GuiController::clearBusStationChanged();
         }
       } else if (GuiController::isBusScreenActive()) {
-        // Periodic update for active screen
-        if (now - busCaches[targetIndex].lastUpdate > 60000) {
+        // Periodic update for active screen OR forced trigger
+        if (now - busCaches[targetIndex].lastUpdate > 60000 ||
+            triggerBusFetch) {
           needFetch = true;
+          triggerBusFetch = false; // Clear the trigger
         }
       }
     }
@@ -503,4 +505,14 @@ void loop() {
       lastWeatherUpdate = now;
     }
   }
+
+  // Detect App Switching (Force Update on Entry)
+  static bool wasBusActive = false;
+  bool isBus = GuiController::isBusScreenActive();
+  if (isBus && !wasBusActive) {
+    // Just entered Bus Screen
+    Serial.println("MAIN: Switched to Bus App -> Forcing Update");
+    triggerBusFetch = true;
+  }
+  wasBusActive = isBus;
 }

@@ -306,23 +306,39 @@ void GuiController::showStockScreen(const std::vector<StockItem> &data,
   lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
 
-  // Header
+  // Header (Unified Style)
   lv_obj_t *header = lv_obj_create(new_scr);
-  lv_obj_set_size(header, LV_PCT(100), 50);
-  lv_obj_set_style_bg_color(header, lv_color_hex(0x1A1A1A), 0);
+  lv_obj_set_size(header, LV_PCT(100), 40);
+  lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP,
+                          0); // Transparent to match Weather
   lv_obj_set_style_border_width(header, 0, 0);
+  lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *title = lv_label_create(header);
   lv_label_set_text(title, "Market Ticker");
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFD700), 0); // Gold
   lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
-  lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
 
-  // List
+  // Date/Time Label
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo, 10)) {
+    char timeStr[32];
+    strftime(timeStr, sizeof(timeStr), "%H:%M",
+             &timeinfo); // Just Time, matches Weather
+    lv_obj_t *time_lb = lv_label_create(header);
+    lv_label_set_text(time_lb, timeStr);
+    lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0); // Grey
+    lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_14, 0);
+    lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
+    activeTimeLabel = time_lb; // Register for updates
+  }
+
+  // List (Positioned below 40px header)
   lv_obj_t *list = lv_obj_create(new_scr);
-  lv_obj_set_size(list, LV_PCT(100), 270);
-  lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_obj_set_size(list, LV_PCT(100), 280); // Fill remaining space (320 - 40)
+  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40); // Start strictly below header
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(list, 0, 0);
@@ -911,58 +927,51 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
   lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
 
-  // 1. STATUS BAR (Consistent with Weather)
-  lv_obj_t *status_bar = lv_obj_create(new_scr);
-  lv_obj_set_size(status_bar, LV_PCT(100), 20);
-  lv_obj_align(status_bar, LV_ALIGN_TOP_MID, 0, 0);
-  lv_obj_set_style_bg_color(status_bar, lv_color_hex(0x1A1A1A), 0);
-  lv_obj_set_style_border_width(status_bar, 0, 0);
-  lv_obj_set_style_pad_all(status_bar, 2, 0);
-  lv_obj_clear_flag(status_bar, LV_OBJ_FLAG_SCROLLABLE);
-
-  struct tm timeinfo;
-  // Use 10ms timeout to prevent blocking
-  if (getLocalTime(&timeinfo, 10)) {
-    char timeStr[16];
-    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-    lv_obj_t *time_lb = lv_label_create(status_bar);
-    lv_label_set_text(time_lb, timeStr);
-    lv_obj_set_style_text_color(time_lb, lv_color_hex(0x888888), 0);
-    lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_14, 0);
-    lv_obj_align(time_lb, LV_ALIGN_RIGHT_MID, -5, 0);
-  }
-
-  // 2. HEADER: Bus Stop (Now below status bar)
+  // 1. UNIFIED HEADER (Bus + Time)
   lv_obj_t *header = lv_obj_create(new_scr);
   lv_obj_set_size(header, LV_PCT(100), 40);
-  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 20);
+  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
   lv_obj_set_style_bg_color(header, lv_color_hex(0xCC0000), 0); // TMB Red
   lv_obj_set_style_border_width(header, 0, 0);
+  lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Bus Icon
+  // Bus Icon (Background)
   lv_obj_t *icon = lv_img_create(header);
   lv_img_set_src(icon, &bus_icon);
-  lv_img_set_zoom(icon, 128); // Scale 64px -> 32px
-  lv_obj_align(icon, LV_ALIGN_LEFT_MID, -10, 0);
+  lv_img_set_zoom(icon, 128);                  // Standard size
+  lv_obj_align(icon, LV_ALIGN_LEFT_MID, 5, 0); // Vertically centered
 
+  // Stop Name (Foreground, Centered Vertically)
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {
     lv_label_set_text(title, data.stopName.c_str());
-    lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_set_width(title, 180);
-    lv_obj_align(title, LV_ALIGN_CENTER, 15, 0);
   } else {
     lv_label_set_text_fmt(title, "Stop: %s", data.stopCode.c_str());
-    lv_obj_align(title, LV_ALIGN_CENTER, 15, 0);
   }
-  lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+  lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
+  lv_obj_set_width(title, 190); // Max Width
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_align(title, LV_ALIGN_LEFT_MID, 10, 0); // Overlays the icon slightly
 
-  // List of Arrivals
+  // Time (Right)
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo, 10)) {
+    char timeStr[32];
+    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo); // Just Time
+    lv_obj_t *time_lb = lv_label_create(header);
+    lv_label_set_text(time_lb, timeStr);
+    lv_obj_set_style_text_color(time_lb, lv_color_hex(0xFFFFFF),
+                                0); // White on Red
+    lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_14, 0);
+    lv_obj_align(time_lb, LV_ALIGN_RIGHT_MID, 0, 0);
+    activeTimeLabel = time_lb; // Register for updates
+  }
+
+  // List of Arrivals (Positioned below 40px header)
   lv_obj_t *list = lv_obj_create(new_scr);
-  lv_obj_set_size(list, LV_PCT(100), 260); // Space below header
-  lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_obj_set_size(list, LV_PCT(100), 280); // Fill remaining space (320 - 40)
+  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40); // Start strictly below header
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x000000), 0);
   lv_obj_set_style_border_width(list, 0, 0);
