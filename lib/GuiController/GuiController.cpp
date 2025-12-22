@@ -503,6 +503,7 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(glass_card, 5, 0);
     lv_obj_clear_flag(glass_card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(glass_card, LV_OBJ_FLAG_CLICKABLE);
 
     // Icon (Fixed Scrollbars)
     lv_obj_t *icon_wrap = lv_obj_create(glass_card);
@@ -593,6 +594,7 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_style_pad_all(details_cont, 0, 0);
     lv_obj_clear_flag(details_cont,
                       LV_OBJ_FLAG_SCROLLABLE); // Fix scrollbar
+    lv_obj_clear_flag(details_cont, LV_OBJ_FLAG_CLICKABLE);
 
     // Pill Macro (High Contrast)
     auto add_pill = [&](const char *label, const char *value, uint32_t color) {
@@ -661,8 +663,10 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_style_border_width(list, 0, 0);
     lv_obj_set_style_pad_all(list, 0, 0);
     // Enable bubbling so clicks reach the background handler
-    // lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE); // REMOVED
-    lv_obj_add_event_cb(list, handleScreenClick, LV_EVENT_CLICKED, NULL);
+    // Enable bubbling so clicks reach the background handler
+    lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE);
+    // REMOVED explicit handler to prevent double-tap
+    // lv_obj_add_event_cb(list, handleScreenClick, LV_EVENT_CLICKED, NULL);
     // scrolling
     // Add event to list to allow scrolling BUT capture clicks if not
     // scrolling
@@ -683,6 +687,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       // Pass clicks through rows to the list container
       lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
+      lv_obj_clear_flag(row,
+                        LV_OBJ_FLAG_CLICKABLE); // FIX: Don't consume clicks
 
       // Time/Day
       lv_obj_t *time_lbl = lv_label_create(row);
@@ -713,6 +719,8 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
       lv_obj_set_style_pad_all(icon_box, 0, 0);
       lv_obj_clear_flag(icon_box,
                         LV_OBJ_FLAG_SCROLLABLE); // FIX SCROLLBARS
+      lv_obj_clear_flag(icon_box,
+                        LV_OBJ_FLAG_CLICKABLE); // FIX: Don't consume clicks
       createWeatherIcon(icon_box, isHourly ? data.hourly[i].weatherCode
                                            : data.daily[i].weatherCode);
       if (lv_obj_get_child(icon_box, 0))
@@ -773,8 +781,10 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
     lv_obj_set_style_border_width(chart, 0, 0);
     lv_obj_set_style_border_width(chart, 0, 0);
     // Bubble clicks to background to ensure view toggling works
-    // lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE); // REMOVED
-    lv_obj_add_event_cb(chart, handleScreenClick, LV_EVENT_CLICKED, NULL);
+    // Bubble clicks to background to ensure view toggling works
+    lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE);
+    // REMOVED explicit handler to prevent double-tap
+    // lv_obj_add_event_cb(chart, handleScreenClick, LV_EVENT_CLICKED, NULL);
     // lv_obj_add_event_cb(chart, toggle_forecast_cb, LV_EVENT_CLICKED, (void
     // *)&data);
 
