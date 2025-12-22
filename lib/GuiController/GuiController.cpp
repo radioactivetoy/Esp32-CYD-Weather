@@ -899,8 +899,9 @@ void GuiController::updateTime() {
 
   struct tm timeinfo;
   if (getLocalTime(&timeinfo, 10)) {
-    char timeStr[16];
-    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
+    char timeStr[32];
+    // Format: "Mon 21 14:30"
+    strftime(timeStr, sizeof(timeStr), "%a %d %H:%M", &timeinfo);
     lv_label_set_text(activeTimeLabel, timeStr);
   }
 }

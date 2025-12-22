@@ -174,16 +174,30 @@ void updateBacklight() {
     struct tm timeinfo;
     int target_pwm = DAY_PWM;
 
-    if (getLocalTime(&timeinfo)) {
+    // Only apply logic if Night Mode is enabled and time is valid
+    if (NetworkManager::getNightModeEnabled() && getLocalTime(&timeinfo)) {
       int h = timeinfo.tm_hour;
-      if (h >= 22 || h < 7) {
+      int start = NetworkManager::getNightStart();
+      int end = NetworkManager::getNightEnd();
+
+      bool isNight = false;
+      if (start > end) {
+        // Example: 22 to 07 (Crosses Midnight)
+        if (h >= start || h < end)
+          isNight = true;
+      } else {
+        // Example: 01 to 05 (Same day)
+        if (h >= start && h < end)
+          isNight = true;
+      }
+
+      if (isNight) {
         target_pwm = NIGHT_PWM;
       }
     }
 
     if (target_pwm != current_pwm) {
-      Serial.printf("Time Update -> Backlight PWM: %d\n", target_pwm);
-      ledcWrite(0, target_pwm); // Pin 27
+      // Serial.printf("Time Update -> Backlight PWM: %d\n", target_pwm);
       ledcWrite(0, target_pwm); // Pin 27
       current_pwm = target_pwm;
     }
@@ -301,6 +315,9 @@ void loop() {
       xSemaphoreTake(dataMutex, portMAX_DELAY);
       GuiController::updateTime();
       xSemaphoreGive(dataMutex);
+
+      // Update Backlight (Check Night Mode)
+      updateBacklight();
     }
 
     // Weather Fetch Trigger

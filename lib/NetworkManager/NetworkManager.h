@@ -19,6 +19,12 @@ public:
   static String getAppId();
   static String getAppKey();
 
+  // New: Improvements
+  static String getTimezone();
+  static bool getNightModeEnabled();
+  static int getNightStart();
+  static int getNightEnd();
+
   // Legacy method if used
   static bool isConnected() { return WiFi.status() == WL_CONNECTED; }
 
@@ -27,6 +33,10 @@ private:
   static WebServer server; // New: Web Server instance
   static String city;
   static String busStop;
+  static String timezone;
+  static bool nightMode;
+  static int nightStart;
+  static int nightEnd;
   static bool shouldSaveConfig;
   static void saveConfigCallback();
   static void configModeCallback(WiFiManager *myWiFiManager);

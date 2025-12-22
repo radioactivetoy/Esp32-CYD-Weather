@@ -6,6 +6,10 @@ Preferences NetworkManager::prefs;
 bool NetworkManager::shouldSaveConfig = false;
 String NetworkManager::city = "Barcelona";
 String NetworkManager::busStop = "2156";
+String NetworkManager::timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
+bool NetworkManager::nightMode = false;
+int NetworkManager::nightStart = 22;
+int NetworkManager::nightEnd = 7;
 WebServer NetworkManager::server(80);
 
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
@@ -39,6 +43,91 @@ void NetworkManager::handleRoot() {
   html += "TMB App Key:<br><input type='text' name='appKey' value='" + appKey +
           "'><br><br>";
 
+  // Improvements
+  html += "<h3>Improvements</h3>";
+  html += "Timezone:<br><select name='timezone'>";
+
+  struct TZ {
+    const char *name;
+    const char *val;
+  };
+  TZ timezones[] = {
+      // Africa
+      {"Africa/Cairo (EET)", "EET-2EEST,M4.5.3/0,M10.5.4/24"},
+      {"Africa/Johannesburg (SAST)", "SAST-2"},
+      {"Africa/Lagos (WAT)", "WAT-1"},
+
+      // Americas
+      {"America/Anchorage (AKST)", "AKST9AKDT,M3.2.0,M11.1.0"},
+      {"America/Argentina/Buenos_Aires (ART)", "ART3"},
+      {"America/Bogota (COT)", "COT5"},
+      {"America/Chicago (CST)", "CST6CDT,M3.2.0,M11.1.0"},
+      {"America/Denver (MST)", "MST7MDT,M3.2.0,M11.1.0"},
+      {"America/Los_Angeles (PST)", "PST8PDT,M3.2.0,M11.1.0"},
+      {"America/Mexico_City (CST)", "CST6"},
+      {"America/New_York (EST)", "EST5EDT,M3.2.0,M11.1.0"},
+      {"America/Phoenix (MST)", "MST7"},
+      {"America/Sao_Paulo (BRT)", "BRT3"},
+      {"America/Toronto (EST)", "EST5EDT,M3.2.0,M11.1.0"},
+      {"America/Vancouver (PST)", "PST8PDT,M3.2.0,M11.1.0"},
+
+      // Asia
+      {"Asia/Bangkok (ICT)", "ICT-7"},
+      {"Asia/Dubai (GST)", "GST-4"},
+      {"Asia/Hong_Kong (HKT)", "HKT-8"},
+      {"Asia/Jakarta (WIB)", "WIB-7"},
+      {"Asia/Jerusalem (IST)", "IST-2IDT,M3.4.4/26,M10.5.0"},
+      {"Asia/Kolkata (IST)", "IST-5:30"},
+      {"Asia/Seoul (KST)", "KST-9"},
+      {"Asia/Shanghai (CST)", "CST-8"},
+      {"Asia/Singapore (SGT)", "SGT-8"},
+      {"Asia/Tokyo (JST)", "JST-9"},
+
+      // Europe
+      {"Europe/Amsterdam (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Athens (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+      {"Europe/Berlin (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Brussels (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Helsinki (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+      {"Europe/Istanbul (TRT)", "TRT-3"},
+      {"Europe/Kyiv (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+      {"Europe/Lisbon (WET)", "WET0WEST,M3.5.0/1,M10.5.0"},
+      {"Europe/London (GMT)", "GMT0BST,M3.5.0/1,M10.5.0"},
+      {"Europe/Madrid (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Moscow (MSK)", "MSK-3"},
+      {"Europe/Paris (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Rome (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Stockholm (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+      {"Europe/Zurich (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+
+      // Pacific
+      {"Pacific/Auckland (NZST)", "NZST-12NZDT,M9.5.0/2,M4.1.0/3"},
+      {"Pacific/Fiji (FJT)", "FJT-12"},
+      {"Pacific/Honolulu (HST)", "HST10"},
+      {"Australia/Sydney (AEST)", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
+      {"Australia/Perth (AWST)", "AWST-8"},
+
+      // UTC
+      {"UTC", "GMT0"}};
+
+  for (const auto &tz : timezones) {
+    String selected = (String(tz.val) == timezone) ? " selected" : "";
+    html += "<option value='" + String(tz.val) + "'" + selected + ">" +
+            String(tz.name) + "</option>";
+  }
+  html += "</select><br>";
+
+  String checked = nightMode ? "checked" : "";
+  html += "Night Mode (Auto-Dim): <input type='checkbox' name='nightMode' " +
+          checked + "><br>";
+
+  html += "Night Start (Hour 0-23):<br><input type='number' name='nightStart' "
+          "value='" +
+          String(nightStart) + "'><br>";
+  html +=
+      "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
+      String(nightEnd) + "'><br><br>";
+
   html += "<input type='submit' value='Save & Reboot'></form>";
   html += "<p>IP: " + WiFi.localIP().toString() + "</p>";
   html += "</body></html>";
@@ -52,11 +141,23 @@ void NetworkManager::handleSave() {
     String appId = server.arg("appId");
     String appKey = server.arg("appKey");
 
+    // New Params
+    timezone = server.arg("timezone");
+    nightMode = server.hasArg("nightMode"); // Checkbox present = true
+    nightStart = server.arg("nightStart").toInt();
+    nightEnd = server.arg("nightEnd").toInt();
+
     prefs.begin("weather_cfg", false);
     prefs.putString("city", city);
     prefs.putString("busStop", busStop);
     prefs.putString("app_id", appId);
     prefs.putString("app_key", appKey);
+
+    prefs.putString("timezone", timezone);
+    prefs.putBool("nightMode", nightMode);
+    prefs.putInt("nightStart", nightStart);
+    prefs.putInt("nightEnd", nightEnd);
+
     prefs.end();
 
     String html = "<html><head><meta http-equiv='refresh' "
@@ -93,6 +194,12 @@ void NetworkManager::begin() {
   String savedAppId = prefs.getString("app_id", "");
   String savedAppKey = prefs.getString("app_key", "");
 
+  // Load Improvements
+  timezone = prefs.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
+  nightMode = prefs.getBool("nightMode", false);
+  nightStart = prefs.getInt("nightStart", 22);
+  nightEnd = prefs.getInt("nightEnd", 7);
+
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);
   wm.setAPCallback(configModeCallback); // Show when in AP mode
@@ -125,7 +232,8 @@ void NetworkManager::begin() {
   // Init NTP
   configTime(3600, 3600, "pool.ntp.org"); // GMT+1 + Daylight Saving
   // More specific for Barcelona:
-  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+  // More specific for Barcelona (OR Configured):
+  setenv("TZ", timezone.c_str(), 1);
   tzset();
 
   if (shouldSaveConfig) {
@@ -142,6 +250,9 @@ void NetworkManager::begin() {
     prefs.putString("busStop", busStop);
     prefs.putString("app_id", savedAppId);
     prefs.putString("app_key", savedAppKey);
+    // Note: Improvements not in WiFiManager yet for simplicity, default to NVS
+    // load If you want them in CP, add WiFiManagerParameters. But WebUI is
+    // better for advanced stuff.
   }
   prefs.end();
 
@@ -180,3 +291,8 @@ String NetworkManager::getAppKey() {
   prefs.end();
   return val;
 }
+
+String NetworkManager::getTimezone() { return timezone; }
+bool NetworkManager::getNightModeEnabled() { return nightMode; }
+int NetworkManager::getNightStart() { return nightStart; }
+int NetworkManager::getNightEnd() { return nightEnd; }
