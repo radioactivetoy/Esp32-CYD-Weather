@@ -1,4 +1,5 @@
 #include "LedController.h"
+#include "NetworkManager.h"
 
 // CYD RGB LED Pins (Active LOW on many boards, let's assume Active LOW)
 // R=4, G=16, B=17
@@ -31,29 +32,25 @@ void LedController::begin() {
 }
 
 void LedController::setRGB(uint8_t r, uint8_t g, uint8_t b) {
-  // Invert for Active LOW (0 = ON, 255 = OFF)
-  // Using digitalWrite for clean ON/OFF to rule out PWM issues on IO16/17
+  // Dimming Logic: Scale down input 0-255 based on preference
+  // Active Low: 255 = OFF, 0 = Full ON.
+  // We want to map: Input 0 -> 255 (OFF), Input 255 -> 255 - (255/Divisor)
 
-  if (r == 255)
-    digitalWrite(PIN_RED, LOW);
-  else if (r == 0)
-    digitalWrite(PIN_RED, HIGH);
-  else
-    analogWrite(PIN_RED, 255 - r);
+  int divisor = 8; // Default Medium (12%)
+  String bright = NetworkManager::getLedBrightness();
+  if (bright == "high")
+    divisor = 1; // 100%
+  else if (bright == "low")
+    divisor = 32; // ~3%
+  // else medium or unknown -> 8
 
-  if (g == 255)
-    digitalWrite(PIN_GREEN, LOW);
-  else if (g == 0)
-    digitalWrite(PIN_GREEN, HIGH);
-  else
-    analogWrite(PIN_GREEN, 255 - g);
+  int dim_r = r / divisor;
+  int dim_g = g / divisor;
+  int dim_b = b / divisor;
 
-  if (b == 255)
-    digitalWrite(PIN_BLUE, LOW);
-  else if (b == 0)
-    digitalWrite(PIN_BLUE, HIGH);
-  else
-    analogWrite(PIN_BLUE, 255 - b);
+  analogWrite(PIN_RED, 255 - dim_r);
+  analogWrite(PIN_GREEN, 255 - dim_g);
+  analogWrite(PIN_BLUE, 255 - dim_b);
 }
 
 bool LedController::isRain(int code) { return (code >= 51); }

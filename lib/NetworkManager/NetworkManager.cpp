@@ -10,7 +10,10 @@ bool NetworkManager::nightMode = false;
 int NetworkManager::nightStart = 22;
 int NetworkManager::nightEnd = 7;
 String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
+String NetworkManager::ledBrightness = "medium";
 WebServer NetworkManager::server(80);
+
+String NetworkManager::getLedBrightness() { return ledBrightness; }
 
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
 
@@ -124,13 +127,22 @@ void NetworkManager::handleRoot() {
   html += "Night Start (Hour 0-23):<br><input type='number' name='nightStart' "
           "value='" +
           String(nightStart) + "'><br>";
-  "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
+  html +=
+      "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
       String(nightEnd) + "'><br><br>";
 
   html += "<h3>Stock Ticker</h3>";
   html += "Symbols (comma split):<br><input type='text' name='stockSymbols' "
           "value='" +
           stockSymbols + "'><br><br>";
+
+  html += "LED Brightness:<br><select name='ledBrightness'>";
+  String b_opts[] = {"low", "medium", "high"};
+  for (String o : b_opts) {
+    String sel = (o == ledBrightness) ? " selected" : "";
+    html += "<option value='" + o + "'" + sel + ">" + o + "</option>";
+  }
+  html += "</select><br><br>";
 
   html += "<input type='submit' value='Save & Reboot'></form>";
   html += "<p>IP: " + WiFi.localIP().toString() + "</p>";
@@ -165,6 +177,10 @@ void NetworkManager::handleSave() {
     // Stocks
     stockSymbols = server.arg("stockSymbols");
     prefs.putString("stockSymbols", stockSymbols);
+
+    // LED
+    ledBrightness = server.arg("ledBrightness");
+    prefs.putString("ledBrightness", ledBrightness);
 
     prefs.end();
 
@@ -207,6 +223,7 @@ void NetworkManager::begin() {
 
   // Load Stocks
   stockSymbols = prefs.getString("stockSymbols", "AAPL,BTC-USD,GRF.MC");
+  ledBrightness = prefs.getString("ledBrightness", "medium");
 
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);
