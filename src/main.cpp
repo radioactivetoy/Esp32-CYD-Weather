@@ -1,5 +1,6 @@
 #include "BusService.h"
 #include "GuiController.h"
+#include "LedController.h"
 #include "NetworkManager.h"
 #include "StockService.h"
 #include "TouchDrv.h"
@@ -95,6 +96,7 @@ void networkTask(void *parameter) {
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     weatherData = tempWeather;
+    LedController::update(weatherData); // Update LED
     xSemaphoreGive(dataMutex);
     Serial.println("NETWORK: Initial Weather Fetched Successfully.");
   } else {
@@ -134,6 +136,7 @@ void networkTask(void *parameter) {
 
           xSemaphoreTake(dataMutex, portMAX_DELAY);
           weatherData = temp;
+          LedController::update(weatherData); // Update LED
           weatherDataUpdated = true;
           xSemaphoreGive(dataMutex);
         }
@@ -250,6 +253,7 @@ void setup() {
 
   // Initialize UI (Screen and LVGL)
   GuiController::init();
+  LedController::begin(); // Initialize LED
 
   static lv_indev_drv_t indev_drv;
   lv_indev_drv_init(&indev_drv);
