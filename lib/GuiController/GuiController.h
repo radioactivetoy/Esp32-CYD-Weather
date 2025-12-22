@@ -21,9 +21,12 @@ public:
   updateBusCache(const BusData &data); // New: Cache update without render
   static void updateStockCache(const std::vector<StockItem> &data); // New
 
+  enum AppMode { APP_WEATHER, APP_STOCK, APP_BUS };
+  static AppMode currentApp;
+
 private:
-  static bool busScreenActive;
-  static bool stockScreenActive;
+  // static bool busScreenActive; // Replaced by currentApp
+  // static bool stockScreenActive; // Replaced by currentApp
   static String pendingMsg;
   static bool needsUpdate;
   static void drawLoadingScreen(const char *msg);

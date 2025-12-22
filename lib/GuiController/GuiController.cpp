@@ -46,8 +46,9 @@ static void opa_anim_cb(void *obj, int32_t v) {
   lv_obj_set_style_opa((lv_obj_t *)obj, v, 0);
 }
 
-bool GuiController::busScreenActive = false;
-bool GuiController::isBusScreenActive() { return busScreenActive; }
+GuiController::AppMode GuiController::currentApp = GuiController::APP_WEATHER;
+
+bool GuiController::isBusScreenActive() { return currentApp == APP_BUS; }
 void GuiController::updateBusCache(const BusData &data) { cachedBus = data; }
 
 void GuiController::init() {
@@ -80,9 +81,8 @@ static lv_obj_t *activeTimeLabel = NULL; // Track the time label
 WeatherData GuiController::cachedWeather;
 BusData GuiController::cachedBus;
 std::vector<StockItem> GuiController::cachedStock;
-bool GuiController::stockScreenActive = false;
 
-bool GuiController::isStockScreenActive() { return stockScreenActive; }
+bool GuiController::isStockScreenActive() { return currentApp == APP_STOCK; }
 void GuiController::updateStockCache(const std::vector<StockItem> &data) {
   cachedStock = data;
 }
@@ -214,35 +214,42 @@ static void toggle_forecast_cb(lv_event_t *e) {
 }
 
 void GuiController::handleGesture(lv_event_t *e) {
-  lv_obj_t *screen = lv_event_get_target(e);
   lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
-  // Serial.printf("DEBUG: Gesture Detected! Dir=%d, on Object=0x%p\n", dir,
-  // screen);
 
-  if (dir == LV_DIR_LEFT) {
-    if (forecastMode < 3) {
-      forecastMode++;
-      showWeatherScreen(cachedWeather, 1); // Animate Left
-    }
-  } else if (dir == LV_DIR_RIGHT) {
-    if (forecastMode > 0) {
-      forecastMode--;
-      showWeatherScreen(cachedWeather, -1); // Animate Right
+  if (dir == LV_DIR_LEFT || dir == LV_DIR_RIGHT) {
+    // Horizontal: Only for Internal Views (Currently only Weather)
+    if (currentApp == APP_WEATHER) {
+      if (dir == LV_DIR_LEFT && forecastMode < 3) {
+        forecastMode++;
+        showWeatherScreen(cachedWeather, 1);
+      } else if (dir == LV_DIR_RIGHT && forecastMode > 0) {
+        forecastMode--;
+        showWeatherScreen(cachedWeather, -1);
+      }
     }
   } else if (dir == LV_DIR_TOP) {
-    // Swipe UP: Show Bus Screen
-    // Serial.println("DEBUG: Swipe UP -> Bus Screen");
-    showBusScreen(cachedBus, 2);
+    // Swipe UP (Next App): Weather -> Stock -> Bus -> Weather
+    if (currentApp == APP_WEATHER)
+      showStockScreen(cachedStock, -2);
+    else if (currentApp == APP_STOCK)
+      showBusScreen(cachedBus, -2);
+    else if (currentApp == APP_BUS)
+      showWeatherScreen(cachedWeather, -2);
+
   } else if (dir == LV_DIR_BOTTOM) {
-    // Swipe DOWN: Stock Screen
-    showStockScreen(cachedStock, -2);
+    // Swipe DOWN (Prev App): Weather -> Bus -> Stock -> Weather
+    if (currentApp == APP_WEATHER)
+      showBusScreen(cachedBus, 2);
+    else if (currentApp == APP_STOCK)
+      showWeatherScreen(cachedWeather, 2);
+    else if (currentApp == APP_BUS)
+      showStockScreen(cachedStock, 2);
   }
 }
 
 void GuiController::showStockScreen(const std::vector<StockItem> &data,
                                     int anim) {
-  busScreenActive = false;
-  stockScreenActive = true;
+  currentApp = APP_STOCK;
 
   // Update Cache
   if (&data != &cachedStock) {
@@ -342,8 +349,7 @@ void GuiController::showStockScreen(const std::vector<StockItem> &data,
 }
 
 void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
-  busScreenActive = false;
-  stockScreenActive = false;
+  currentApp = APP_WEATHER;
   uint32_t tStart = millis();
   // Serial.println("DEBUG: GuiController::showWeatherScreen START");
 
@@ -811,8 +817,7 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
   // buses)\n", data.arrivals.size()); Serial.printf("DEBUG: GUI StopName:
   // '%s'\n", data.stopName.c_str());
 
-  busScreenActive = true;
-  stockScreenActive = false;
+  currentApp = APP_BUS;
 
   // Update Cache
   if (&data != &cachedBus) {
