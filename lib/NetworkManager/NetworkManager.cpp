@@ -67,8 +67,7 @@ void NetworkManager::handleRoot() {
           "'><br><br>";
 
   // Improvements
-  html += "<h3>Improvements</h3>";
-  html += "Timezone:<br><select name='timezone'>";
+    html += "Timezone:<br><select name='timezone'>";
 
   struct TZ {
     const char *name;
@@ -138,7 +137,7 @@ void NetworkManager::handleRoot() {
     html += "<option value='" + String(tz.val) + "'" + selected + ">" +
             String(tz.name) + "</option>";
   }
-  html += "</select><br>";
+  html += "</select><br><br>";
 
   String checked = nightMode ? "checked" : "";
   html += "Night Mode (Auto-Dim): <input type='checkbox' name='nightMode' " +
