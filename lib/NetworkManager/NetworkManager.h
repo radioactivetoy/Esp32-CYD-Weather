@@ -25,6 +25,9 @@ public:
   static int getNightStart();
   static int getNightEnd();
 
+  static int getDayBrightness();
+  static int getNightBrightness();
+
   static String getStockSymbols();
   static String getLedBrightness();
   static std::vector<String>
@@ -43,6 +46,8 @@ private:
   static bool nightMode;
   static int nightStart;
   static int nightEnd;
+  static int dayBrightness;
+  static int nightBrightness;
   static String stockSymbols;
   static String ledBrightness;
   static bool shouldSaveConfig;

@@ -9,11 +9,15 @@ String NetworkManager::timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
 bool NetworkManager::nightMode = false;
 int NetworkManager::nightStart = 22;
 int NetworkManager::nightEnd = 7;
+int NetworkManager::dayBrightness = 100;
+int NetworkManager::nightBrightness = 10;
 String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
 String NetworkManager::ledBrightness = "medium";
 WebServer NetworkManager::server(80);
 
 String NetworkManager::getLedBrightness() { return ledBrightness; }
+int NetworkManager::getDayBrightness() { return dayBrightness; }
+int NetworkManager::getNightBrightness() { return nightBrightness; }
 
 std::vector<String> NetworkManager::getBusStops() {
   std::vector<String> stops;
@@ -88,6 +92,17 @@ void NetworkManager::handleRoot() {
 
   // Improvements
   html += "<h3>Lighting</h3>";
+
+  // Brightness Sliders
+  html += "Day Brightness (" + String(dayBrightness) + "%):<br>";
+  html += "<input type='range' name='dayBrightness' min='1' max='100' value='" +
+          String(dayBrightness) + "'><br>";
+
+  html += "Night Brightness (" + String(nightBrightness) + "%):<br>";
+  html +=
+      "<input type='range' name='nightBrightness' min='1' max='100' value='" +
+      String(nightBrightness) + "'><br><br>";
+
   html += "Timezone:<br><select name='timezone'>";
 
   struct TZ {
@@ -203,6 +218,12 @@ void NetworkManager::handleSave() {
     nightStart = server.arg("nightStart").toInt();
     nightEnd = server.arg("nightEnd").toInt();
 
+    // Brightness Params (with safe parsing)
+    if (server.hasArg("dayBrightness"))
+      dayBrightness = server.arg("dayBrightness").toInt();
+    if (server.hasArg("nightBrightness"))
+      nightBrightness = server.arg("nightBrightness").toInt();
+
     prefs.begin("weather_cfg", false);
     prefs.putString("city", city);
     prefs.putString("busStop", busStop);
@@ -213,6 +234,9 @@ void NetworkManager::handleSave() {
     prefs.putBool("nightMode", nightMode);
     prefs.putInt("nightStart", nightStart);
     prefs.putInt("nightEnd", nightEnd);
+
+    prefs.putInt("dayBrightness", dayBrightness);
+    prefs.putInt("nightBrightness", nightBrightness);
 
     // Stocks
     stockSymbols = server.arg("stockSymbols");
@@ -260,6 +284,9 @@ void NetworkManager::begin() {
   nightMode = prefs.getBool("nightMode", false);
   nightStart = prefs.getInt("nightStart", 22);
   nightEnd = prefs.getInt("nightEnd", 7);
+
+  dayBrightness = prefs.getInt("dayBrightness", 100);    // Default 100%
+  nightBrightness = prefs.getInt("nightBrightness", 10); // Default 10%
 
   // Load Stocks
   stockSymbols = prefs.getString("stockSymbols", "AAPL,BTC-USD,GRF.MC");
