@@ -35,6 +35,8 @@ void BusView::show(const BusData &data, int anim) {
 
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
                       NULL);
+  lv_obj_add_event_cb(new_scr, GuiController::handleScreenClick,
+                      LV_EVENT_CLICKED, NULL);
 
   lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
@@ -47,6 +49,7 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(header, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
 
   lv_obj_t *icon = lv_img_create(header);
   lv_img_set_src(icon, &bus_icon);
@@ -87,6 +90,7 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_set_style_pad_all(list, 0, 0);
   lv_obj_set_style_pad_row(list, 0, 0);
   lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
 
   if (data.arrivals.empty()) {
     lv_obj_t *lbl = lv_label_create(list);
@@ -104,12 +108,13 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
       lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);
+      lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks from row
 
       uint32_t bg_col =
           (idx % 2 == 0) ? 0x101010 : 0x202020; // 333333 -> 202020
       lv_obj_set_style_bg_color(row, lv_color_hex(bg_col), 0);
-      lv_obj_set_style_border_width(row, 1, 0); // Added Border
-      lv_obj_set_style_border_color(row, lv_color_hex(0x555555), 0);
+      lv_obj_set_style_border_width(row, 2, 0); // Increased 1->2
+      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_set_style_pad_all(row, 5, 0);

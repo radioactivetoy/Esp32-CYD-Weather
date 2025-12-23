@@ -267,33 +267,34 @@ void GuiController::handleGesture(lv_event_t *e) {
         currentCityIndex = (currentCityIndex + 1) % cityCount;
         cityChanged = true;
       }
-    } else if (currentApp == APP_BUS && busStopCount > 1) {
-      currentBusIndex = (currentBusIndex + 1) % busStopCount;
-      busStationChanged = true;
     }
+    // Bus Swipe Removed
   } else if (dir == LV_DIR_RIGHT) {
     if (currentApp == APP_WEATHER) {
       if (cityCount > 1) {
         currentCityIndex = (currentCityIndex - 1 + cityCount) % cityCount;
         cityChanged = true;
       }
-    } else if (currentApp == APP_BUS && busStopCount > 1) {
-      currentBusIndex = (currentBusIndex - 1 + busStopCount) % busStopCount;
-      busStationChanged = true;
     }
+    // Bus Swipe Removed
   }
 }
 
 void GuiController::handleScreenClick(lv_event_t *e) {
-  // Fix: Ignore click if a gesture was detected (prevents Mode toggle when
-  // swiping cities)
+  // Fix: Ignore click if a gesture was detected
   if (lv_indev_get_gesture_dir(lv_indev_get_act()) != LV_DIR_NONE) {
     return;
   }
 
   if (currentApp == APP_WEATHER) {
-    // Serial.println("DEBUG: Screen Clicked -> Switching View");
     forecastMode = (forecastMode + 1) % 4;
     showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_FADE_ON);
+  } else if (currentApp == APP_BUS) {
+    // Switch Station on Tap
+    if (busStopCount > 1) {
+      currentBusIndex = (currentBusIndex + 1) % busStopCount;
+      busStationChanged = true;
+      // showLoadingScreen removed as requested
+    }
   }
 }

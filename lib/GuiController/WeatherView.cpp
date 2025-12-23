@@ -192,7 +192,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(glass_card, LV_OPA_70, 0);
     lv_obj_set_style_radius(glass_card, 15, 0);
-    lv_obj_set_style_border_width(glass_card, 1, 0);
+    lv_obj_set_style_border_width(glass_card, 2, 0); // Increased 1->2
     lv_obj_set_style_border_color(glass_card, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_opa(glass_card, LV_OPA_50, 0);
     lv_obj_set_flex_flow(glass_card, LV_FLEX_FLOW_COLUMN);
@@ -303,8 +303,9 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_bg_color(pill, lv_color_hex(0x202020), 0);
       lv_obj_set_style_bg_opa(pill, LV_OPA_80, 0);
       lv_obj_set_style_radius(pill, 10, 0);
-      lv_obj_set_style_border_width(pill, 1, 0);
-      lv_obj_set_style_border_color(pill, lv_color_hex(0x555555), 0);
+      lv_obj_set_style_border_width(pill, 2, 0); // Increased 1->2
+      lv_obj_set_style_border_color(pill, lv_color_hex(0x777777),
+                                    0); // Lighter 55->77
       lv_obj_set_style_border_opa(pill, LV_OPA_70, 0);
       lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_COLUMN);
       lv_obj_set_flex_align(pill, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
@@ -374,8 +375,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                                 lv_color_hex((i % 2) ? 0x202020 : 0x101010),
                                 0);               // Darker alternating
       lv_obj_set_style_bg_opa(row, LV_OPA_80, 0); // High Opacity
-      lv_obj_set_style_border_width(row, 1, 0);   // Added Border
-      lv_obj_set_style_border_color(row, lv_color_hex(0x555555), 0);
+      lv_obj_set_style_border_width(row, 2, 0);   // 1->2
+      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
       lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);

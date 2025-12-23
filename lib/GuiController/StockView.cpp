@@ -75,13 +75,11 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   } else {
     for (const auto &item : data) {
       lv_obj_t *row = lv_obj_create(list);
-      lv_obj_set_size(row, LV_PCT(100), 60); // 60px Height
-      lv_obj_set_style_bg_color(row, lv_color_hex(0x202020),
-                                0);               // Match Pill BG
-      lv_obj_set_style_bg_opa(row, LV_OPA_80, 0); // Match Pill Opacity
-      lv_obj_set_style_border_color(row, lv_color_hex(0x555555),
-                                    0); // Match Pill Border
-      lv_obj_set_style_border_width(row, 1, 0);
+      lv_obj_set_size(row, LV_PCT(100), 70); // 70px Height
+      lv_obj_set_style_bg_color(row, lv_color_hex(0x202020), 0);
+      lv_obj_set_style_bg_opa(row, LV_OPA_80, 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
+      lv_obj_set_style_border_width(row, 2, 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -96,14 +94,15 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       // Right Container (Price + Change)
       lv_obj_t *right_box = lv_obj_create(row);
       lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_PCT(100)); // Auto width
-      lv_obj_align(right_box, LV_ALIGN_RIGHT_MID, 0, 0);
-      lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_COLUMN); // Stack Vertically
+      lv_obj_align(right_box, LV_ALIGN_RIGHT_MID, -10,
+                   0); // Added margin from right edge
+      lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_COLUMN);
       lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END,
                             LV_FLEX_ALIGN_CENTER);
       lv_obj_set_style_bg_opa(right_box, LV_OPA_TRANSP, 0);
       lv_obj_set_style_border_width(right_box, 0, 0);
       lv_obj_set_style_pad_all(right_box, 0, 0);
-      lv_obj_set_style_pad_row(right_box, 2, 0); // Gap between price/change
+      lv_obj_set_style_pad_row(right_box, 0, 0); // Remove gap to save space
 
       // Price - Size 20
       lv_obj_t *price = lv_label_create(right_box);
@@ -125,8 +124,8 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       lv_color_t cColor = (item.changePercent >= 0) ? lv_color_hex(0x00FF00)
                                                     : lv_color_hex(0xFF4444);
       lv_obj_set_style_text_color(change, cColor, 0);
-      lv_obj_set_style_text_font(change, GuiController::safe_font_16,
-                                 0); // 16px
+      lv_obj_set_style_text_font(change, GuiController::safe_font_14,
+                                 0); // 14px
       lv_obj_set_style_text_align(change, LV_TEXT_ALIGN_RIGHT, 0);
     }
   }

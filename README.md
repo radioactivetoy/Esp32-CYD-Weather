@@ -9,8 +9,9 @@ The interface relies on intuitive **Touch Gestures**:
 | Action | Gesture | Function |
 | :--- | :--- | :--- |
 | **Switch App** | **Swipe UP / DOWN** | Cycle between **Weather** ↔ **Bus** ↔ **Crypto/Stocks** |
-| **Switch Page** | **Swipe LEFT / RIGHT** | **Weather**: Next/Prev City <br> **Bus**: Next/Prev Bus Stop |
-| **Toggle View** | **Tap Screen** | **Weather**: Cycle Views (Current → Hourly → Daily → Graph) |
+| **Switch Page** | **Swipe LEFT / RIGHT** | **Weather**: Next/Prev City |
+| **Switch Station**| **Tap Screen (Bus)** | **Bus**: Next Bus Stop (Silent Update) |
+| **Toggle View** | **Tap Screen (Weather)** | **Weather**: Cycle Views (Current → Hourly → Daily → Graph) |
 | **Refresh Data** | **Auto / Swipe Entry** | **Bus**: Auto-refreshes on entry (Instant) & every 60s <br> **Stock**: 5 min |
 
 ## ✨ Features (Polished)
@@ -70,10 +71,29 @@ No need to edit code! Configure everything via the web interface.
 3.  **Customize**:
     -   **City & Bus Stop**: Set your location.
     -   **Stocks**: Comma-separated symbols (e.g., `AAPL,BINANCE:BTCUSDT`).
+    -   **Lighting**:
+        -   **Day Brightness**: Slider (1-100%) for active hours.
+        -   **Night Brightness**: Slider (1-100%) for night mode.
+        -   **Night Mode**: Enable auto-dimming between specific hours.
     -   **Timezone**: Select your local time.
-    -   **Night Mode**: Set start/end hours for screen dimming.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
     -   **API Keys**: Enter your TMB App ID/Key and Finnhub API Key.
+
+## Controls
+-   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).
+-   **Weather App**:
+    -   **Tap Screen**: Toggle Forecast Mode (Current -> Hourly -> Daily).
+    -   **Swipe Left/Right**: Switch between configured Cities.
+-   **Bus App**:
+    -   **Tap Screen**: Switch to next Bus Stop (Silent background update).
+-   **Stocks App**:
+    -   Displays configured stock quotes with real-time price/change.
+
+## Recent Updates
+-   **Configurable Backlight**: Set specific brightness levels for Day and Night modes via Web UI.
+-   **Enhanced UI**: High-contrast 2px borders and optimized layouts for better visibility.
+-   **Touch Navigation**: Simplified Bus Station switching via tap.
+-   **Stock View**: Improved row spacing (70px) and font sizing to prevent text clipping.
 
 ## API Keys
 
