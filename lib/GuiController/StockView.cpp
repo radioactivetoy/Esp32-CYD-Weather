@@ -31,7 +31,8 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_t *title = lv_label_create(header);
   lv_label_set_text(title, "Market Ticker");
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFD700), 0);
-  lv_obj_set_style_text_font(title, &GuiController::safe_font_16, 0);
+  lv_obj_set_style_text_font(title, GuiController::safe_font_20,
+                             0); // Title 20px
   lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
 
   // Time
@@ -42,7 +43,8 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
     lv_obj_t *time_lb = lv_label_create(header);
     lv_label_set_text(time_lb, timeStr);
     lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0);
-    lv_obj_set_style_text_font(time_lb, &GuiController::safe_font_14, 0);
+    lv_obj_set_style_text_font(time_lb, GuiController::safe_font_20,
+                               0); // Upgrade 14->20
     lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
     GuiController::setActiveTimeLabel(time_lb);
   }
@@ -73,39 +75,55 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   } else {
     for (const auto &item : data) {
       lv_obj_t *row = lv_obj_create(list);
-      lv_obj_set_size(row, LV_PCT(100), 60);
+      lv_obj_set_size(row, LV_PCT(100), 60); // 60px Height
       lv_obj_set_style_bg_color(row, lv_color_hex(0x111111), 0);
       lv_obj_set_style_border_color(row, lv_color_hex(0x333333), 0);
       lv_obj_set_style_border_width(row, 1, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
-      // Symbol
+      // Symbol (Company Name) - Size 20, Left Mid
       lv_obj_t *sym = lv_label_create(row);
       lv_label_set_text(sym, item.symbol.c_str());
       lv_obj_set_style_text_color(sym, lv_color_hex(0xFFFFFF), 0);
-      lv_obj_set_style_text_font(sym, &GuiController::safe_font_16, 0);
+      lv_obj_set_style_text_font(sym, GuiController::safe_font_20,
+                                 0); // 20px
       lv_obj_align(sym, LV_ALIGN_LEFT_MID, 5, 0);
 
-      // Price
-      lv_obj_t *price = lv_label_create(row);
+      // Right Container (Price + Change)
+      lv_obj_t *right_box = lv_obj_create(row);
+      lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_PCT(100)); // Auto width
+      lv_obj_align(right_box, LV_ALIGN_RIGHT_MID, 0, 0);
+      lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_COLUMN); // Stack Vertically
+      lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END,
+                            LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_bg_opa(right_box, LV_OPA_TRANSP, 0);
+      lv_obj_set_style_border_width(right_box, 0, 0);
+      lv_obj_set_style_pad_all(right_box, 0, 0);
+      lv_obj_set_style_pad_row(right_box, 2, 0); // Gap between price/change
+
+      // Price - Size 20
+      lv_obj_t *price = lv_label_create(right_box);
       char buf[32];
       if (item.price < 1.0)
         snprintf(buf, sizeof(buf), "$%.4f", item.price);
       else
         snprintf(buf, sizeof(buf), "$%.2f", item.price);
       lv_label_set_text(price, buf);
-      lv_obj_set_style_text_color(price, lv_color_hex(0xEEEEEE), 0);
-      lv_obj_set_style_text_font(price, &GuiController::safe_font_24, 0);
-      lv_obj_align(price, LV_ALIGN_TOP_RIGHT, -5, 2);
+      lv_obj_set_style_text_color(price, lv_color_hex(0xFFFFFF), 0);
+      lv_obj_set_style_text_font(price, GuiController::safe_font_20,
+                                 0); // 20px
+      lv_obj_set_style_text_align(price, LV_TEXT_ALIGN_RIGHT, 0);
 
-      // Change
-      lv_obj_t *change = lv_label_create(row);
+      // Change % - Size 16
+      lv_obj_t *change = lv_label_create(right_box);
       snprintf(buf, sizeof(buf), "%+.2f%%", item.changePercent);
       lv_label_set_text(change, buf);
       lv_color_t cColor = (item.changePercent >= 0) ? lv_color_hex(0x00FF00)
-                                                    : lv_color_hex(0xFF0000);
+                                                    : lv_color_hex(0xFF4444);
       lv_obj_set_style_text_color(change, cColor, 0);
-      lv_obj_align_to(change, price, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 0);
+      lv_obj_set_style_text_font(change, GuiController::safe_font_16,
+                                 0); // 16px
+      lv_obj_set_style_text_align(change, LV_TEXT_ALIGN_RIGHT, 0);
     }
   }
 

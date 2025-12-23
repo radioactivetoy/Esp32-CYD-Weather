@@ -16,10 +16,13 @@ public:
   static void init();
   static void handle(uint32_t ms);
 
-  // Safe Mutable Fonts
-  static lv_font_t safe_font_14;
-  static lv_font_t safe_font_16;
-  static lv_font_t safe_font_24;
+  // Safe Font Instances (Pointers)
+  static const lv_font_t *safe_font_14;
+  static const lv_font_t *safe_font_16;
+  static const lv_font_t *safe_font_20;
+  static const lv_font_t *safe_font_24;
+  static const lv_font_t *safe_font_28;
+  static const lv_font_t *safe_font_32;
 
   // These now delegate to Views
   static void showWeatherScreen(const WeatherData &data, int anim = -1);

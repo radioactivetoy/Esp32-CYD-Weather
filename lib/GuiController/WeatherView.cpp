@@ -168,7 +168,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                           ? GuiController::sanitize(data.cityName).c_str()
                           : "Unknown");
     lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
-    lv_obj_set_style_text_font(city_lbl, &GuiController::safe_font_16, 0);
+    lv_obj_set_style_text_font(city_lbl, GuiController::safe_font_16, 0);
     lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
     struct tm timeinfo;
@@ -178,14 +178,17 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *time_lbl = lv_label_create(header_row);
       lv_label_set_text(time_lbl, timeStr);
       lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xAAAAAA), 0);
+      lv_obj_set_style_text_font(time_lbl, GuiController::safe_font_20,
+                                 0); // Upgrade Clock 14->20
       lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
       GuiController::setActiveTimeLabel(time_lbl); // Register
     }
 
     // Glass Card
     lv_obj_t *glass_card = lv_obj_create(bg_grad);
-    lv_obj_set_size(glass_card, 180, 150);
-    lv_obj_align(glass_card, LV_ALIGN_CENTER, 0, -45);
+    lv_obj_set_size(glass_card, 180, 155); // Reduced 165->155
+    lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
+                 38); // Align below header (moved up 45->38)
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(glass_card, LV_OPA_40, 0);
     lv_obj_set_style_radius(glass_card, 15, 0);
@@ -196,17 +199,20 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_flex_align(glass_card, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(glass_card, 5, 0);
+    lv_obj_set_style_pad_row(glass_card, 2,
+                             0); // Minimize internal vertical gap
     lv_obj_clear_flag(glass_card,
                       LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     lv_obj_t *icon_wrap = lv_obj_create(glass_card);
-    lv_obj_set_size(icon_wrap, 60, 60);
+    lv_obj_set_size(icon_wrap, 50, 50); // Reduced 60->50 to save vertical space
     lv_obj_set_style_bg_opa(icon_wrap, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(icon_wrap, 0, 0);
     lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE);
     createWeatherIcon(icon_wrap, data.currentWeatherCode);
     if (lv_obj_get_child(icon_wrap, 0))
-      lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0), 256);
+      lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0),
+                      220); // Zoom 256->220 (approx 0.85x)
 
     // Temp Row
     lv_obj_t *temp_row = lv_obj_create(glass_card);
@@ -241,7 +247,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_t *temp_lbl = lv_label_create(temp_row);
     snprintf(buf, sizeof(buf), "%.1f°C", data.currentTemp);
     lv_label_set_text(temp_lbl, buf);
-    lv_obj_set_style_text_font(temp_lbl, &GuiController::safe_font_24, 0);
+    lv_obj_set_style_text_font(temp_lbl, GuiController::safe_font_32,
+                               0); // Upgrade 24->32
     lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
 
     // Right Arrow
@@ -262,8 +269,9 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_t *hl_lbl = lv_label_create(glass_card);
     snprintf(buf, sizeof(buf), "H:%.0f° L:%.0f°", data.daily[0].maxTemp,
              data.daily[0].minTemp);
-    lv_label_set_text(hl_lbl, buf);
-    lv_obj_set_style_text_font(hl_lbl, &GuiController::safe_font_14, 0);
+    lv_label_set_text(hl_lbl, buf); // Restored!
+    lv_obj_set_style_text_font(hl_lbl, GuiController::safe_font_16,
+                               0); // Upgrade H/L 14->16
     lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_pad_top(hl_lbl, 0, 0);
 
@@ -271,6 +279,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_t *desc_lbl = lv_label_create(glass_card);
     lv_label_set_text(desc_lbl, getWeatherDesc(data.currentWeatherCode));
     lv_obj_set_style_text_color(desc_lbl, lv_color_hex(0xFFD700), 0);
+    lv_obj_set_style_text_font(desc_lbl, GuiController::safe_font_16,
+                               0); // Upgrade Desc -> 16
     lv_obj_set_style_pad_top(desc_lbl, 2, 0);
 
     // Pills
@@ -304,12 +314,15 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *v = lv_label_create(pill);
       lv_label_set_text(v, value);
       lv_obj_set_style_text_color(v, lv_color_hex(color), 0);
-      lv_obj_set_style_text_font(v, &GuiController::safe_font_14, 0);
+      lv_obj_set_style_text_font(v, GuiController::safe_font_16,
+                                 0); // Upgrade 14->16
 
       lv_obj_t *l = lv_label_create(pill);
       lv_label_set_text(l, label);
-      lv_obj_set_style_text_color(l, lv_color_hex(0xAAAAAA), 0);
-      lv_obj_set_style_text_font(l, &GuiController::safe_font_14, 0);
+      lv_obj_set_style_text_color(l, lv_color_hex(0xDDDDDD),
+                                  0); // Brighter Grey
+      lv_obj_set_style_text_font(l, GuiController::safe_font_16,
+                                 0); // Upgrade 14->16
     };
 
     snprintf(buf, sizeof(buf), "%d%%", data.currentHumidity);
@@ -335,7 +348,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     String headerText = GuiController::sanitize(data.cityName) +
                         (isHourly ? " - Hourly" : " - 7 Days");
     lv_label_set_text(header, headerText.c_str());
-    lv_obj_set_style_text_font(header, &GuiController::safe_font_16, 0);
+    lv_obj_set_style_text_font(header, GuiController::safe_font_16, 0);
     lv_obj_set_style_text_color(header, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 10);
 
