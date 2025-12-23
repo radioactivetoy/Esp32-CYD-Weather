@@ -190,11 +190,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
                  38); // Align below header (moved up 45->38)
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(glass_card, LV_OPA_40, 0);
+    lv_obj_set_style_bg_opa(glass_card, LV_OPA_70, 0);
     lv_obj_set_style_radius(glass_card, 15, 0);
     lv_obj_set_style_border_width(glass_card, 1, 0);
     lv_obj_set_style_border_color(glass_card, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_opa(glass_card, LV_OPA_20, 0);
+    lv_obj_set_style_border_opa(glass_card, LV_OPA_50, 0);
     lv_obj_set_flex_flow(glass_card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(glass_card, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -286,7 +286,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     // Pills
     lv_obj_t *details_cont = lv_obj_create(bg_grad);
     lv_obj_set_size(details_cont, 220, 90);
-    lv_obj_align(details_cont, LV_ALIGN_BOTTOM_MID, 0, -15);
+    lv_obj_align(details_cont, LV_ALIGN_BOTTOM_MID, 0,
+                 -2); // Moved lower -15 -> -2
     lv_obj_set_style_bg_opa(details_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(details_cont, 0, 0);
     lv_obj_set_flex_flow(details_cont, LV_FLEX_FLOW_ROW_WRAP);
@@ -300,15 +301,16 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *pill = lv_obj_create(details_cont);
       lv_obj_set_size(pill, 105, 40);
       lv_obj_set_style_bg_color(pill, lv_color_hex(0x202020), 0);
-      lv_obj_set_style_bg_opa(pill, LV_OPA_60, 0);
+      lv_obj_set_style_bg_opa(pill, LV_OPA_80, 0);
       lv_obj_set_style_radius(pill, 10, 0);
       lv_obj_set_style_border_width(pill, 1, 0);
       lv_obj_set_style_border_color(pill, lv_color_hex(0x555555), 0);
-      lv_obj_set_style_border_opa(pill, LV_OPA_50, 0);
+      lv_obj_set_style_border_opa(pill, LV_OPA_70, 0);
       lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_COLUMN);
       lv_obj_set_flex_align(pill, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);
       lv_obj_set_style_pad_all(pill, 0, 0);
+      lv_obj_set_style_pad_row(pill, 0, 0); // Added: Remove gap between lines
       lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE);
 
       lv_obj_t *v = lv_label_create(pill);
