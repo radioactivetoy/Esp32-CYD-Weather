@@ -1,4 +1,5 @@
 #include "WeatherService.h"
+#include <WiFiClientSecure.h>
 
 // Open-Meteo URL:
 // https://api.open-meteo.com/v1/forecast?latitude=XX&longitude=YY&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto
@@ -29,30 +30,44 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon) {
     return false;
 
   bool weatherSuccess = false;
+#include <WiFiClientSecure.h> // Ensure this is included at top if not already
+
+  // ... (inside updateWeather)
+
   // 1. Weather Forecast
   {
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
-    String url = "http://api.open-meteo.com/v1/forecast?latitude=" +
-                 String(lat) + "&longitude=" + String(lon) +
-                 "&current=temperature_2m,relative_humidity_2m,apparent_"
-                 "temperature,"
-                 "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m" +
-                 "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
-                 "&hourly=temperature_2m,weather_code&timezone=auto&past_days="
-                 "1"; // Added past_days=1
+
+    // Change http -> https
+    String url =
+        "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat) +
+        "&longitude=" + String(lon) +
+        "&current=temperature_2m,relative_humidity_2m,apparent_"
+        "temperature,"
+        "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m" +
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
+        "&hourly=temperature_2m,weather_code&timezone=auto&past_days="
+        "1"; // Added past_days=1
 
     Serial.println("Fetching weather: " + url);
-    http.begin(url);
+    http.begin(client, url); // Pass client
+    http.useHTTP10(true);    // Disable Chunked Transfer for Stream Parsing
     http.setConnectTimeout(5000);
     http.setTimeout(5000);
 
     int httpResponseCode = http.GET();
     if (httpResponseCode > 0) {
-      String payload = http.getString();
+      // Stream Parsing for Memory Safety
       JsonDocument doc;
-      DeserializationError error = deserializeJson(doc, payload);
+      DeserializationError error = deserializeJson(doc, http.getStream());
 
-      if (!error) {
+      if (error) {
+        Serial.print("Deserialize JSON failed: ");
+        Serial.println(error.c_str());
+      } else {
+        // ... (parsing logic remains same)
         weatherSuccess = true;
         JsonObject current = doc["current"];
         data.currentTemp = current["temperature_2m"];
@@ -110,18 +125,20 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon) {
 
   // 2. Air Quality Forecast
   {
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     String aqiUrl =
-        "http://air-quality-api.open-meteo.com/v1/air-quality?latitude=" +
+        "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" +
         String(lat) + "&longitude=" + String(lon) + "&current=european_aqi";
 
     Serial.println("Fetching AQI: " + aqiUrl);
-    http.begin(aqiUrl);
+    http.begin(client, aqiUrl);
+    http.useHTTP10(true); // Disable Chunked Transfer for Stream Parsing
     int aqiRes = http.GET();
     if (aqiRes > 0) {
-      String payload = http.getString();
       JsonDocument doc;
-      DeserializationError error = deserializeJson(doc, payload);
+      DeserializationError error = deserializeJson(doc, http.getStream());
       if (!error) {
         data.currentAQI = doc["current"]["european_aqi"];
       }
@@ -151,6 +168,8 @@ bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
   if (WiFi.status() != WL_CONNECTED)
     return false;
 
+  WiFiClientSecure client;
+  client.setInsecure();
   HTTPClient http;
   // URL Encode city name
   String encodedCity = cityName;
@@ -161,15 +180,16 @@ bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
       "&count=1&language=en&format=json";
 
   Serial.println("Geocoding city: " + url);
-  http.begin(url);
+  http.begin(client, url);
+  http.useHTTP10(true); // Disable Chunked Transfer for Stream Parsing
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
 
   int httpResponseCode = http.GET();
   if (httpResponseCode > 0) {
-    String payload = http.getString();
+    // Use Stream to save RAM
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
+    DeserializationError error = deserializeJson(doc, http.getStream());
 
     if (error || !doc.containsKey("results")) {
       Serial.println("Geocoding failed or no results.");

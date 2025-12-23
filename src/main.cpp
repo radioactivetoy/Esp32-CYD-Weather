@@ -80,14 +80,6 @@ void networkTask(void *parameter) {
     xSemaphoreGive(dataMutex);
   }
 
-  String city = NetworkManager::getCity();
-  String resolvedName;
-  if (WeatherService::lookupCoordinates(city, lat, lon, resolvedName)) {
-    weatherData.cityName = resolvedName;
-  } else {
-    weatherData.cityName = city;
-  }
-
   // --- FIX: Initial Weather Fetch ---
 
   // 1. Initial City Setup
