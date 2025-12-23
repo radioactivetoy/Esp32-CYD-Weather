@@ -11,7 +11,7 @@
 static const uint16_t screenWidth = 240;
 static const uint16_t screenHeight = 320;
 static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf[screenWidth * 30];
+static lv_color_t buf[screenWidth * 60];
 TFT_eSPI tft = TFT_eSPI();
 
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
