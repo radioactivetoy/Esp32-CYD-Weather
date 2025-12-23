@@ -64,6 +64,14 @@ std::vector<StockItem> GuiController::cachedStock;
 static lv_obj_t *activeTimeLabel = NULL;
 static int forecastMode = 0; // 0: Current, 1: Hourly, 2: Daily, 3: Chart
 
+// Custom Font
+LV_FONT_DECLARE(font_intl_16);
+
+// Safe Font Instances
+lv_font_t GuiController::safe_font_14;
+lv_font_t GuiController::safe_font_16;
+lv_font_t GuiController::safe_font_24;
+
 void GuiController::init() {
   lv_init();
   tft.begin();
@@ -76,7 +84,20 @@ void GuiController::init() {
   disp_drv.flush_cb = my_disp_flush;
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);
-  Serial.println("GuiController: LVGL and Display initialized.");
+
+  // --- FONT SETUP ---
+  // Copy Read-Only fonts to RAM so we can modify them (add fallback)
+  memcpy(&safe_font_14, &lv_font_montserrat_14, sizeof(lv_font_t));
+  memcpy(&safe_font_16, &lv_font_montserrat_16, sizeof(lv_font_t));
+  memcpy(&safe_font_24, &lv_font_montserrat_24, sizeof(lv_font_t));
+
+  // Link Fallback (RAM -> Flash)
+  // User requested to remove special characters instead of fighting fonts.
+  safe_font_14.fallback = NULL;
+  safe_font_16.fallback = NULL;
+  safe_font_24.fallback = NULL;
+
+  Serial.println("GuiController: LVGL initialized. Safe fonts created.");
 }
 
 void GuiController::showLoadingScreen(const char *msg) {
@@ -121,6 +142,54 @@ void GuiController::handle(uint32_t ms) {
     lv_timer_handler();
     delay(5);
   }
+}
+
+String GuiController::sanitize(String text) {
+  // Replace multi-byte UTF-8 sequences with single ASCII chars
+  // Catalan/Spanish common chars
+
+  // Note: Arduino String .replace() works on single chars or substrings.
+  // We need to replace the UTF-8 bytes.
+
+  // c-cedilla
+  text.replace("\xC3\xA7", "c"); // ç
+  text.replace("\xC3\x87", "C"); // Ç
+
+  // n-tilde
+  text.replace("\xC3\xB1", "n"); // ñ
+  text.replace("\xC3\x91", "N"); // Ñ
+
+  // a-grave/acute
+  text.replace("\xC3\xA0", "a"); // à
+  text.replace("\xC3\xA1", "a"); // á
+  text.replace("\xC3\x80", "A"); // À
+  text.replace("\xC3\x81", "A"); // Á
+
+  // e-grave/acute
+  text.replace("\xC3\xA8", "e"); // è
+  text.replace("\xC3\xA9", "e"); // é
+  text.replace("\xC3\x88", "E"); // È
+  text.replace("\xC3\x89", "E"); // É
+
+  // i-acute/dieresis
+  text.replace("\xC3\xAD", "i"); // í
+  text.replace("\xC3\xAF", "i"); // ï
+  text.replace("\xC3\x8D", "I"); // Í
+  text.replace("\xC3\x8F", "I"); // Ï
+
+  // o-grave/acute
+  text.replace("\xC3\xB2", "o"); // ò
+  text.replace("\xC3\xB3", "o"); // ó
+  text.replace("\xC3\x92", "O"); // Ò
+  text.replace("\xC3\x93", "O"); // Ó
+
+  // u-acute/dieresis
+  text.replace("\xC3\xBA", "u"); // ú
+  text.replace("\xC3\xBC", "u"); // ü
+  text.replace("\xC3\x9A", "U"); // Ú
+  text.replace("\xC3\x9C", "U"); // Ü
+
+  return text;
 }
 
 // --- DELEGATED VIEW METHODS ---

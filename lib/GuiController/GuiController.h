@@ -11,11 +11,15 @@
 #include "StockView.h"
 #include "WeatherView.h"
 
-
 class GuiController {
 public:
   static void init();
   static void handle(uint32_t ms);
+
+  // Safe Mutable Fonts
+  static lv_font_t safe_font_14;
+  static lv_font_t safe_font_16;
+  static lv_font_t safe_font_24;
 
   // These now delegate to Views
   static void showWeatherScreen(const WeatherData &data, int anim = -1);
@@ -27,6 +31,7 @@ public:
   static void showLoadingScreen(const char *msg = nullptr);
   static void updateTime();                        // Efficient clock update
   static void setActiveTimeLabel(lv_obj_t *label); // New setter
+  static String sanitize(String text);             // Remove heavy accents
 
   static bool isBusScreenActive();
   static bool isStockScreenActive();

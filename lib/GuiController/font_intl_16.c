@@ -1,0 +1,343 @@
+#include <lvgl.h>
+
+/*
+ * Custom Font for Latin-1 Supplement Characters (Catalan/Spanish)
+ * Height: 16px
+ * Range: Specific Extended Characters
+ * Fix: Added Dummy descriptor at index 0 to align IDs with cmaps starting at 1.
+ */
+
+// -----------------------------------------------------------------------------
+// BITMAPS
+// -----------------------------------------------------------------------------
+
+// '·' (0xB7)
+static const uint8_t glyph_B7[] = {0x18, 0x18, 0x00, 0x00};
+
+// 'À' (0xC0)
+static const uint8_t glyph_C0[] = {0x08, 0x14, 0x00, 0x1C, 0x22, 0x41,
+                                   0x41, 0x7F, 0x41, 0x41, 0x00, 0x00};
+// 'Á' (0xC1)
+static const uint8_t glyph_C1[] = {0x08, 0x10, 0x00, 0x1C, 0x22, 0x41,
+                                   0x41, 0x7F, 0x41, 0x41, 0x00, 0x00};
+// 'È' (0xC8)
+static const uint8_t glyph_C8[] = {0x08, 0x14, 0x00, 0x7F, 0x40, 0x40,
+                                   0x7E, 0x40, 0x40, 0x7F, 0x00, 0x00};
+// 'É' (0xC9)
+static const uint8_t glyph_C9[] = {0x08, 0x10, 0x00, 0x7F, 0x40, 0x40,
+                                   0x7E, 0x40, 0x40, 0x7F, 0x00, 0x00};
+// 'Ç' (0xC7)
+static const uint8_t glyph_C7[] = {0x1E, 0x20, 0x40, 0x40, 0x40,
+                                   0x20, 0x1E, 0x08, 0x10};
+// 'Í' (0xCD)
+static const uint8_t glyph_CD[] = {0x08, 0x10, 0x00, 0x3E, 0x08, 0x08,
+                                   0x08, 0x08, 0x08, 0x3E, 0x00, 0x00};
+// 'Ï' (0xCF)
+static const uint8_t glyph_CF[] = {0x28, 0x00, 0x00, 0x3E, 0x08, 0x08,
+                                   0x08, 0x08, 0x08, 0x3E, 0x00, 0x00};
+// 'Ñ' (0xD1)
+static const uint8_t glyph_D1[] = {0x3C, 0x00, 0x41, 0x61, 0x51, 0x49,
+                                   0x45, 0x43, 0x41, 0x00, 0x00};
+// 'Ò' (0xD2)
+static const uint8_t glyph_D2[] = {0x08, 0x14, 0x00, 0x1C, 0x22, 0x41,
+                                   0x41, 0x41, 0x22, 0x1C, 0x00, 0x00};
+// 'Ó' (0xD3)
+static const uint8_t glyph_D3[] = {0x08, 0x10, 0x00, 0x1C, 0x22, 0x41,
+                                   0x41, 0x41, 0x22, 0x1C, 0x00, 0x00};
+// 'Ú' (0xDA)
+static const uint8_t glyph_DA[] = {0x08, 0x10, 0x00, 0x41, 0x41, 0x41,
+                                   0x41, 0x41, 0x22, 0x1C, 0x00, 0x00};
+// 'Ü' (0xDC)
+static const uint8_t glyph_DC[] = {0x28, 0x00, 0x00, 0x41, 0x41, 0x41,
+                                   0x41, 0x41, 0x22, 0x1C, 0x00, 0x00};
+
+// 'à' (0xE0)
+static const uint8_t glyph_E0[] = {0x08, 0x10, 0x00, 0x3C, 0x02, 0x3E,
+                                   0x42, 0x42, 0x3E, 0x00, 0x00};
+// 'á' (0xE1)
+static const uint8_t glyph_E1[] = {0x04, 0x08, 0x00, 0x3C, 0x02, 0x3E,
+                                   0x42, 0x42, 0x3E, 0x00, 0x00};
+// 'ç' (0xE7)
+static const uint8_t glyph_E7[] = {0x1C, 0x20, 0x40, 0x20, 0x1C, 0x08, 0x10};
+// 'è' (0xE8)
+static const uint8_t glyph_E8[] = {0x04, 0x08, 0x00, 0x1C, 0x22,
+                                   0x3F, 0x20, 0x1E, 0x00, 0x00};
+// 'é' (0xE9)
+static const uint8_t glyph_E9[] = {0x02, 0x04, 0x00, 0x1C, 0x22,
+                                   0x3F, 0x20, 0x1E, 0x00, 0x00};
+// 'í' (0xED)
+static const uint8_t glyph_ED[] = {0x04, 0x08, 0x00, 0x0C, 0x0C,
+                                   0x0C, 0x0C, 0x0E, 0x00, 0x00};
+// 'ï' (0xEF)
+static const uint8_t glyph_EF[] = {0x14, 0x00, 0x00, 0x0C, 0x0C,
+                                   0x0C, 0x0C, 0x0E, 0x00, 0x00};
+// 'ñ' (0xF1)
+static const uint8_t glyph_F1[] = {0x1A, 0x00, 0x5C, 0x62, 0x42,
+                                   0x42, 0x42, 0x00, 0x00};
+// 'ò' (0xF2)
+static const uint8_t glyph_F2[] = {0x04, 0x08, 0x00, 0x1C, 0x22,
+                                   0x22, 0x22, 0x1C, 0x00, 0x00};
+// 'ó' (0xF3)
+static const uint8_t glyph_F3[] = {0x02, 0x04, 0x00, 0x1C, 0x22,
+                                   0x22, 0x22, 0x1C, 0x00, 0x00};
+// 'ú' (0xFA)
+static const uint8_t glyph_FA[] = {0x02, 0x04, 0x00, 0x42, 0x42,
+                                   0x42, 0x46, 0x3A, 0x00, 0x00};
+// 'ü' (0xFC)
+static const uint8_t glyph_FC[] = {0x14, 0x00, 0x00, 0x42, 0x42,
+                                   0x42, 0x46, 0x3A, 0x00, 0x00};
+
+// -----------------------------------------------------------------------------
+// GLYPH DESCRIPTORS
+// -----------------------------------------------------------------------------
+static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
+    {.bitmap_index = 0,
+     .adv_w = 0,
+     .box_w = 0,
+     .box_h = 0,
+     .ofs_x = 0,
+     .ofs_y = 0}, // DUMMY (ID 0)
+
+    {.bitmap_index = 0,
+     .adv_w = 4 * 16,
+     .box_w = 4,
+     .box_h = 4,
+     .ofs_x = 2,
+     .ofs_y = 3}, // B7 ·
+    {.bitmap_index = 4,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // C0 À
+    {.bitmap_index = 16,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // C1 Á
+    {.bitmap_index = 28,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // C7 Ç
+    {.bitmap_index = 37,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // C8 È
+    {.bitmap_index = 49,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // C9 É
+    {.bitmap_index = 61,
+     .adv_w = 6 * 16,
+     .box_w = 6,
+     .box_h = 10,
+     .ofs_x = 1,
+     .ofs_y = 0}, // CD Í
+    {.bitmap_index = 73,
+     .adv_w = 6 * 16,
+     .box_w = 6,
+     .box_h = 10,
+     .ofs_x = 1,
+     .ofs_y = 0}, // CF Ï
+    {.bitmap_index = 85,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // D1 Ñ
+    {.bitmap_index = 96,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // D2 Ò
+    {.bitmap_index = 108,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // D3 Ó
+    {.bitmap_index = 120,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // DA Ú
+    {.bitmap_index = 132,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // DC Ü
+    {.bitmap_index = 144,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // E0 à
+    {.bitmap_index = 155,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // E1 á
+    {.bitmap_index = 166,
+     .adv_w = 7 * 16,
+     .box_w = 7,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = -3}, // E7 ç
+    {.bitmap_index = 173,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // E8 è
+    {.bitmap_index = 183,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // E9 é
+    {.bitmap_index = 193,
+     .adv_w = 4 * 16,
+     .box_w = 4,
+     .box_h = 10,
+     .ofs_x = 1,
+     .ofs_y = 0}, // ED í
+    {.bitmap_index = 203,
+     .adv_w = 4 * 16,
+     .box_w = 4,
+     .box_h = 10,
+     .ofs_x = 1,
+     .ofs_y = 0}, // EF ï
+    {.bitmap_index = 213,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // F1 ñ
+    {.bitmap_index = 222,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // F2 ò
+    {.bitmap_index = 232,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // F3 ó
+    {.bitmap_index = 242,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // FA ú
+    {.bitmap_index = 252,
+     .adv_w = 8 * 16,
+     .box_w = 8,
+     .box_h = 10,
+     .ofs_x = 0,
+     .ofs_y = 0}, // FC ü
+};
+
+// -----------------------------------------------------------------------------
+// CMAP
+// -----------------------------------------------------------------------------
+static const uint16_t unicodes[] = {
+    0x00B7,                                                 // ·
+    0x00C0, 0x00C1, 0x00C7, 0x00C8, 0x00C9, 0x00CD, 0x00CF, // À Á Ç È É Í Ï
+    0x00D1, 0x00D2, 0x00D3, 0x00DA, 0x00DC,                 // Ñ Ò Ó Ú Ü
+    0x00E0, 0x00E1, 0x00E7, 0x00E8, 0x00E9, 0x00ED, 0x00EF, // à á ç è é í ï
+    0x00F1, 0x00F2, 0x00F3, 0x00FA, 0x00FC                  // ñ ò ó ú ü
+};
+
+static const lv_font_fmt_txt_cmap_t cmaps[] = {
+    {.range_start = 0,
+     .range_length = 25,
+     .glyph_id_start = 1, // Start at 1 (indices into glyph_dsc)
+     .unicode_list = unicodes,
+     .glyph_id_ofs_list = NULL,
+     .list_length = 25,
+     .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY}};
+
+// -----------------------------------------------------------------------------
+// BITMAP DATA
+// -----------------------------------------------------------------------------
+static const uint8_t glyph_bitmap[] = {
+    // B7
+    0x18, 0x18, 0x00, 0x00,
+    // C0
+    0x08, 0x14, 0x00, 0x1C, 0x22, 0x41, 0x41, 0x7F, 0x41, 0x41, 0x00, 0x00,
+    // C1
+    0x08, 0x10, 0x00, 0x1C, 0x22, 0x41, 0x41, 0x7F, 0x41, 0x41, 0x00, 0x00,
+    // C7
+    0x1E, 0x20, 0x40, 0x40, 0x40, 0x20, 0x1E, 0x08, 0x10,
+    // C8
+    0x08, 0x14, 0x00, 0x7F, 0x40, 0x40, 0x7E, 0x40, 0x40, 0x7F, 0x00, 0x00,
+    // C9
+    0x08, 0x10, 0x00, 0x7F, 0x40, 0x40, 0x7E, 0x40, 0x40, 0x7F, 0x00, 0x00,
+    // CD
+    0x08, 0x10, 0x00, 0x3E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x3E, 0x00, 0x00,
+    // CF
+    0x28, 0x00, 0x00, 0x3E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x3E, 0x00, 0x00,
+    // D1
+    0x3C, 0x00, 0x41, 0x61, 0x51, 0x49, 0x45, 0x43, 0x41, 0x00, 0x00,
+    // D2
+    0x08, 0x14, 0x00, 0x1C, 0x22, 0x41, 0x41, 0x41, 0x22, 0x1C, 0x00, 0x00,
+    // D3
+    0x08, 0x10, 0x00, 0x1C, 0x22, 0x41, 0x41, 0x41, 0x22, 0x1C, 0x00, 0x00,
+    // DA
+    0x08, 0x10, 0x00, 0x41, 0x41, 0x41, 0x41, 0x41, 0x22, 0x1C, 0x00, 0x00,
+    // DC
+    0x28, 0x00, 0x00, 0x41, 0x41, 0x41, 0x41, 0x41, 0x22, 0x1C, 0x00, 0x00,
+
+    // E0
+    0x08, 0x10, 0x00, 0x3C, 0x02, 0x3E, 0x42, 0x42, 0x3E, 0x00, 0x00,
+    // E1
+    0x04, 0x08, 0x00, 0x3C, 0x02, 0x3E, 0x42, 0x42, 0x3E, 0x00, 0x00,
+    // E7
+    0x1C, 0x20, 0x40, 0x20, 0x1C, 0x08, 0x10,
+    // E8
+    0x04, 0x08, 0x00, 0x1C, 0x22, 0x3F, 0x20, 0x1E, 0x00, 0x00,
+    // E9
+    0x02, 0x04, 0x00, 0x1C, 0x22, 0x3F, 0x20, 0x1E, 0x00, 0x00,
+    // ED
+    0x04, 0x08, 0x00, 0x0C, 0x0C, 0x0C, 0x0C, 0x0E, 0x00, 0x00,
+    // EF
+    0x14, 0x00, 0x00, 0x0C, 0x0C, 0x0C, 0x0C, 0x0E, 0x00, 0x00,
+    // F1
+    0x1A, 0x00, 0x5C, 0x62, 0x42, 0x42, 0x42, 0x00, 0x00,
+    // F2
+    0x04, 0x08, 0x00, 0x1C, 0x22, 0x22, 0x22, 0x1C, 0x00, 0x00,
+    // F3
+    0x02, 0x04, 0x00, 0x1C, 0x22, 0x22, 0x22, 0x1C, 0x00, 0x00,
+    // FA
+    0x02, 0x04, 0x00, 0x42, 0x42, 0x42, 0x46, 0x3A, 0x00, 0x00,
+    // FC
+    0x14, 0x00, 0x00, 0x42, 0x42, 0x42, 0x46, 0x3A, 0x00, 0x00};
+
+const lv_font_fmt_txt_dsc_t font_intl_16_dsc = {.glyph_bitmap = glyph_bitmap,
+                                                .glyph_dsc = glyph_dsc,
+                                                .cmaps = cmaps,
+                                                .kern_dsc = NULL,
+                                                .kern_scale = 0,
+                                                .cmap_num = 1,
+                                                .bpp = 1,
+                                                .kern_classes = 0,
+                                                .bitmap_format = 0};
+
+lv_font_t font_intl_16 = {.get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,
+                          .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,
+                          .line_height = 16,
+                          .base_line = 3,
+                          .dsc = &font_intl_16_dsc};

@@ -31,7 +31,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_t *title = lv_label_create(header);
   lv_label_set_text(title, "Market Ticker");
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFD700), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_font(title, &GuiController::safe_font_16, 0);
   lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
 
   // Time
@@ -42,7 +42,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
     lv_obj_t *time_lb = lv_label_create(header);
     lv_label_set_text(time_lb, timeStr);
     lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0);
-    lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(time_lb, &GuiController::safe_font_14, 0);
     lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
     GuiController::setActiveTimeLabel(time_lb);
   }
@@ -83,7 +83,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       lv_obj_t *sym = lv_label_create(row);
       lv_label_set_text(sym, item.symbol.c_str());
       lv_obj_set_style_text_color(sym, lv_color_hex(0xFFFFFF), 0);
-      lv_obj_set_style_text_font(sym, &lv_font_montserrat_16, 0);
+      lv_obj_set_style_text_font(sym, &GuiController::safe_font_16, 0);
       lv_obj_align(sym, LV_ALIGN_LEFT_MID, 5, 0);
 
       // Price
@@ -95,7 +95,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
         snprintf(buf, sizeof(buf), "$%.2f", item.price);
       lv_label_set_text(price, buf);
       lv_obj_set_style_text_color(price, lv_color_hex(0xEEEEEE), 0);
-      lv_obj_set_style_text_font(price, &lv_font_montserrat_24, 0);
+      lv_obj_set_style_text_font(price, &GuiController::safe_font_24, 0);
       lv_obj_align(price, LV_ALIGN_TOP_RIGHT, -5, 2);
 
       // Change

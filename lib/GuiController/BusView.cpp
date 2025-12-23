@@ -55,7 +55,7 @@ void BusView::show(const BusData &data, int anim) {
 
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {
-    lv_label_set_text(title, data.stopName.c_str());
+    lv_label_set_text(title, GuiController::sanitize(data.stopName).c_str());
   } else {
     lv_label_set_text_fmt(title, "Stop: %s", data.stopCode.c_str());
   }
@@ -72,7 +72,7 @@ void BusView::show(const BusData &data, int anim) {
     lv_obj_t *time_lb = lv_label_create(header);
     lv_label_set_text(time_lb, timeStr);
     lv_obj_set_style_text_color(time_lb, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(time_lb, &GuiController::safe_font_14, 0);
     lv_obj_align(time_lb, LV_ALIGN_RIGHT_MID, 0, 0);
     GuiController::setActiveTimeLabel(time_lb);
   }
@@ -126,20 +126,20 @@ void BusView::show(const BusData &data, int anim) {
       lv_label_set_text(lineLbl, arr.line.c_str());
       lv_obj_center(lineLbl);
       lv_obj_set_style_text_color(lineLbl, txtCol, 0);
-      lv_obj_set_style_text_font(lineLbl, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(lineLbl, &GuiController::safe_font_14, 0);
 
       lv_obj_t *dest = lv_label_create(row);
-      lv_label_set_text(dest, arr.destination.c_str());
+      lv_label_set_text(dest, GuiController::sanitize(arr.destination).c_str());
       lv_obj_set_flex_grow(dest, 1);
       lv_label_set_long_mode(dest, LV_LABEL_LONG_SCROLL_CIRCULAR);
       lv_obj_set_style_text_color(dest, lv_color_hex(0xDDDDDD), 0);
-      lv_obj_set_style_text_font(dest, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(dest, &GuiController::safe_font_14, 0);
 
       lv_obj_t *timeLbl = lv_label_create(row);
       lv_label_set_text(timeLbl, arr.text.c_str());
       lv_obj_set_width(timeLbl, 55);
       lv_obj_set_style_text_align(timeLbl, LV_TEXT_ALIGN_RIGHT, 0);
-      lv_obj_set_style_text_font(timeLbl, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(timeLbl, &GuiController::safe_font_14, 0);
 
       uint32_t eta_col = 0x00FF00;
       int mins = arr.seconds / 60;

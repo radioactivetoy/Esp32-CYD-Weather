@@ -163,11 +163,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_pad_all(header_row, 5, 0);
 
     lv_obj_t *city_lbl = lv_label_create(header_row);
-    lv_label_set_text(city_lbl, data.cityName.length() > 0
-                                    ? data.cityName.c_str()
-                                    : "Unknown");
+    lv_label_set_text(city_lbl,
+                      data.cityName.length() > 0
+                          ? GuiController::sanitize(data.cityName).c_str()
+                          : "Unknown");
     lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
-    lv_obj_set_style_text_font(city_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(city_lbl, &GuiController::safe_font_16, 0);
     lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
     struct tm timeinfo;
@@ -219,17 +220,20 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_pad_column(temp_row, 8, 0);
     lv_obj_clear_flag(temp_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Left Arrow
+    // Left Arrow (Trend vs Yesterday)
     lv_obj_t *arrow_l = lv_label_create(temp_row);
     float diffL = data.daily[0].maxTemp - data.yesterdayMaxTemp;
-    if (diffL >= 1.0) {
+    Serial.printf("TREND DEBUG: Yest: %.1f, Today: %.1f, Diff: %.1f\n",
+                  data.yesterdayMaxTemp, data.daily[0].maxTemp, diffL);
+
+    if (diffL >= 0.5) { // Threshold 0.5
       lv_label_set_text(arrow_l, LV_SYMBOL_UP);
       lv_obj_set_style_text_color(arrow_l, lv_color_hex(0xFF5555), 0);
-    } else if (diffL <= -1.0) {
+    } else if (diffL <= -0.5) {
       lv_label_set_text(arrow_l, LV_SYMBOL_DOWN);
       lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x5555FF), 0);
     } else {
-      lv_label_set_text(arrow_l, "-");
+      lv_label_set_text(arrow_l, "-"); // Stable
       lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x888888), 0);
     }
 
@@ -237,7 +241,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_t *temp_lbl = lv_label_create(temp_row);
     snprintf(buf, sizeof(buf), "%.1f°C", data.currentTemp);
     lv_label_set_text(temp_lbl, buf);
-    lv_obj_set_style_text_font(temp_lbl, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(temp_lbl, &GuiController::safe_font_24, 0);
     lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
 
     // Right Arrow
@@ -259,7 +263,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     snprintf(buf, sizeof(buf), "H:%.0f° L:%.0f°", data.daily[0].maxTemp,
              data.daily[0].minTemp);
     lv_label_set_text(hl_lbl, buf);
-    lv_obj_set_style_text_font(hl_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(hl_lbl, &GuiController::safe_font_14, 0);
     lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_pad_top(hl_lbl, 0, 0);
 
@@ -300,12 +304,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *v = lv_label_create(pill);
       lv_label_set_text(v, value);
       lv_obj_set_style_text_color(v, lv_color_hex(color), 0);
-      lv_obj_set_style_text_font(v, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(v, &GuiController::safe_font_14, 0);
 
       lv_obj_t *l = lv_label_create(pill);
       lv_label_set_text(l, label);
       lv_obj_set_style_text_color(l, lv_color_hex(0xAAAAAA), 0);
-      lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(l, &GuiController::safe_font_14, 0);
     };
 
     snprintf(buf, sizeof(buf), "%d%%", data.currentHumidity);
@@ -328,9 +332,10 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     bool isHourly = (forecastMode == 1);
 
     lv_obj_t *header = lv_label_create(bg_grad);
-    String headerText = data.cityName + (isHourly ? " - Hourly" : " - 7 Days");
+    String headerText = GuiController::sanitize(data.cityName) +
+                        (isHourly ? " - Hourly" : " - 7 Days");
     lv_label_set_text(header, headerText.c_str());
-    lv_obj_set_style_text_font(header, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(header, &GuiController::safe_font_16, 0);
     lv_obj_set_style_text_color(header, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 10);
 
@@ -423,7 +428,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else if (forecastMode == 3) {
     // === CHART VIEW ===
     lv_obj_t *title = lv_label_create(bg_grad);
-    String titleText = data.cityName + " - 24h Temp";
+    String titleText = GuiController::sanitize(data.cityName) + " - 24h Temp";
     lv_label_set_text(title, titleText.c_str());
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
