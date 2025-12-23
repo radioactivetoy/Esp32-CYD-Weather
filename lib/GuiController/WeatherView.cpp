@@ -371,9 +371,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
                             LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
       lv_obj_set_style_bg_color(row,
-                                lv_color_hex((i % 2) ? 0x222222 : 0x000000), 0);
-      lv_obj_set_style_border_width(row, 0, 0);
-      lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+                                lv_color_hex((i % 2) ? 0x202020 : 0x101010),
+                                0);               // Darker alternating
+      lv_obj_set_style_bg_opa(row, LV_OPA_80, 0); // High Opacity
+      lv_obj_set_style_border_width(row, 1, 0);   // Added Border
+      lv_obj_set_style_border_color(row, lv_color_hex(0x555555), 0);
+      lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
       lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -453,7 +456,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_align(chart, LV_ALIGN_CENTER, 0, 10);
     lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
     lv_obj_set_style_bg_color(chart, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(chart, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(chart, LV_OPA_70,
+                            0); // Increased 50->70 for contrast
     lv_obj_set_style_border_width(chart, 0, 0);
     lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE);
 

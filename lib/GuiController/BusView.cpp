@@ -105,9 +105,12 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);
 
-      uint32_t bg_col = (idx % 2 == 0) ? 0x000000 : 0x333333;
+      uint32_t bg_col =
+          (idx % 2 == 0) ? 0x101010 : 0x202020; // 333333 -> 202020
       lv_obj_set_style_bg_color(row, lv_color_hex(bg_col), 0);
-      lv_obj_set_style_border_width(row, 0, 0);
+      lv_obj_set_style_border_width(row, 1, 0); // Added Border
+      lv_obj_set_style_border_color(row, lv_color_hex(0x555555), 0);
+      lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_set_style_pad_all(row, 5, 0);
       lv_obj_set_style_pad_column(row, 8, 0);

@@ -76,9 +76,13 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
     for (const auto &item : data) {
       lv_obj_t *row = lv_obj_create(list);
       lv_obj_set_size(row, LV_PCT(100), 60); // 60px Height
-      lv_obj_set_style_bg_color(row, lv_color_hex(0x111111), 0);
-      lv_obj_set_style_border_color(row, lv_color_hex(0x333333), 0);
+      lv_obj_set_style_bg_color(row, lv_color_hex(0x202020),
+                                0);               // Match Pill BG
+      lv_obj_set_style_bg_opa(row, LV_OPA_80, 0); // Match Pill Opacity
+      lv_obj_set_style_border_color(row, lv_color_hex(0x555555),
+                                    0); // Match Pill Border
       lv_obj_set_style_border_width(row, 1, 0);
+      lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
       // Symbol (Company Name) - Size 20, Left Mid
