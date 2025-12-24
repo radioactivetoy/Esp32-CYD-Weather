@@ -138,34 +138,38 @@ void DataManager::networkTask(void *parameter) {
   }
 
   // 2. Initial Weather Fetch (City 0)
-  Serial.printf("NETWORK: Fetching Primary City: %s\n", cities[0].c_str());
-  WeatherData tempWeather;
-  float pLat, pLon;
-  String pResolved;
-  bool primarySuccess = false;
+  if (!cities.empty()) {
+    Serial.printf("NETWORK: Fetching Primary City: %s\n", cities[0].c_str());
+    WeatherData tempWeather;
+    float pLat, pLon;
+    String pResolved;
+    bool primarySuccess = false;
 
-  if (WeatherService::lookupCoordinates(cities[0], pLat, pLon, pResolved,
-                                        NetworkManager::getOwmApiKey())) {
-    String owmKey = NetworkManager::getOwmApiKey();
-    if (WeatherService::updateWeather(tempWeather, pLat, pLon, owmKey)) {
-      tempWeather.cityName = (pResolved.length() > 0) ? pResolved : cities[0];
+    if (WeatherService::lookupCoordinates(cities[0], pLat, pLon, pResolved,
+                                          NetworkManager::getOwmApiKey())) {
+      String owmKey = NetworkManager::getOwmApiKey();
+      if (WeatherService::updateWeather(tempWeather, pLat, pLon, owmKey)) {
+        tempWeather.cityName = (pResolved.length() > 0) ? pResolved : cities[0];
 
-      cityCaches[0].data = tempWeather;
-      cityCaches[0].hasData = true;
-      cityCaches[0].lastUpdate = millis();
+        cityCaches[0].data = tempWeather;
+        cityCaches[0].hasData = true;
+        cityCaches[0].lastUpdate = millis();
 
-      // Push to Global
-      if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
-        weatherData = tempWeather;
-        weatherDataUpdated = true;          // Flag for main loop
-        LedController::update(weatherData); // LED logic
-        xSemaphoreGive(dataMutex);
+        // Push to Global
+        if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
+          weatherData = tempWeather;
+          weatherDataUpdated = true;          // Flag for main loop
+          LedController::update(weatherData); // LED logic
+          xSemaphoreGive(dataMutex);
+        }
+        primarySuccess = true;
       }
-      primarySuccess = true;
     }
+    if (!primarySuccess)
+      Serial.println("NETWORK: Failed initial primary fetch.");
+  } else {
+    Serial.println("NETWORK: No cities configured.");
   }
-  if (!primarySuccess)
-    Serial.println("NETWORK: Failed initial primary fetch.");
 
   // 3. Bus Setup
   std::vector<String> stopIds = NetworkManager::getBusStops();
@@ -177,154 +181,202 @@ void DataManager::networkTask(void *parameter) {
     busCaches[i].lastUpdate = 0;
   }
 
+  // 4. Initial Bus Fetch (Stop 0)
+  if (stopIds.size() > 0) {
+    String stopId = stopIds[0];
+    Serial.printf("NETWORK: Fetching Primary Bus Stop: %s\n", stopId.c_str());
+    BusData tempBus;
+    if (BusService::updateBusTimes(tempBus, stopId,
+                                   NetworkManager::getAppId().c_str(),
+                                   NetworkManager::getAppKey().c_str())) {
+      busCaches[0].data = tempBus;
+      busCaches[0].lastUpdate = millis();
+
+      if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
+        busData = tempBus;
+        busDataUpdated = true;
+        xSemaphoreGive(dataMutex);
+      }
+    } else {
+      Serial.println("NETWORK: Failed initial bus fetch.");
+    }
+  }
+
   // Tell GUI we are ready to show main screen?
   // In old code, main.cpp set `pendingWeatherRedraw = true` after setup.
   // We can simulate this by setting `weatherDataUpdated = true` (already done
   // above). The main loop will notice this and draw.
 
   uint32_t lastStockUpdate = 0;
+  uint32_t lastNetworkRequestMs = 0; // Rate Limiter
 
   // --- MAIN LOOP ---
   for (;;) {
     uint32_t now = millis();
 
+    // Rate Limiting Check (Min 1s between requests)
+    bool safeToRequest = (now - lastNetworkRequestMs > 1000);
+
+    // ---------------- WEATHER ----------------
     // ---------------- WEATHER ----------------
     int targetCityIndex = GuiController::getCityIndex();
-    bool citySwitched =
-        GuiController::hasCityChanged(); // Note: GuiController must handle
-                                         // clearing this?
-    // Actually DataManager reading it doesn't clear it from GuiController side
-    // if we access directly? Reading `GuiController::hasCityChanged()` returns
-    // the bool. We need to clear it. `GuiController::clearCityChanged()`.
+    bool citySwitched = GuiController::hasCityChanged();
+    if (citySwitched)
+      GuiController::clearCityChanged();
 
-    // A. Primary City Background Update (Every 10m)
-    if (cityCaches.size() > 0 && (now - cityCaches[0].lastUpdate > 600000)) {
-      Serial.println("NETWORK: Updating Primary City (Background)...");
-      WeatherData temp;
-      float lat, lon;
-      String res;
-      String owmKey = NetworkManager::getOwmApiKey();
-      if (WeatherService::lookupCoordinates(cityCaches[0].cityName, lat, lon,
-                                            res, owmKey)) {
-        if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
-          temp.cityName = (res.length() > 0) ? res : cityCaches[0].cityName;
-          cityCaches[0].data = temp;
-          cityCaches[0].lastUpdate = now;
-          cityCaches[0].hasData = true;
+    // Prioritize Manual Trigger or Switched City (Immediate Update if Stale)
+    int cityToUpdate = -1;
 
-          // Update Global
-          xSemaphoreTake(dataMutex, portMAX_DELAY);
-          if (targetCityIndex == 0) {
-            weatherData = temp;
-            weatherDataUpdated = true;
-          }
-          LedController::update(temp);
-          xSemaphoreGive(dataMutex);
+    // Only process manual trigger if safe to request
+    if ((manualWeatherTrigger || (citySwitched && targetCityIndex >= 0)) &&
+        safeToRequest) {
+      // If switched, only update if stale (> 10 mins) or no data
+      if (manualWeatherTrigger || !cityCaches[targetCityIndex].hasData ||
+          (now - cityCaches[targetCityIndex].lastUpdate > 600000)) {
+        cityToUpdate = targetCityIndex;
+      }
+      manualWeatherTrigger = false;
+    }
+
+    // If no priority update, check for Background Updates (All Cities)
+    if (cityToUpdate == -1) {
+      for (size_t i = 0; i < cityCaches.size(); i++) {
+        // Update if never updated (startup) OR stale > 15 mins (900s)
+        if (cityCaches[i].lastUpdate == 0 ||
+            (now - cityCaches[i].lastUpdate > 900000)) {
+          cityToUpdate = i;
+          break; // Update one per loop to yield to Bus/Stocks
         }
       }
     }
 
-    // B. Active City Logic
-    if (targetCityIndex >= 0 && targetCityIndex < (int)cityCaches.size()) {
-      bool needFetch = false;
-      if (citySwitched) {
-        if (!cityCaches[targetCityIndex].hasData ||
-            (now - cityCaches[targetCityIndex].lastUpdate > 600000)) {
-          needFetch = true;
-        } else {
-          // Cache Hit
-          xSemaphoreTake(dataMutex, portMAX_DELAY);
-          weatherData = cityCaches[targetCityIndex].data;
-          weatherDataUpdated = true;
-          xSemaphoreGive(dataMutex);
-          GuiController::clearCityChanged();
-        }
-      } else if (targetCityIndex != 0) {
-        // Background update for secondary active city
-        if (now - cityCaches[targetCityIndex].lastUpdate > 600000)
-          needFetch = true;
-      }
+    // Execute Update
+    if (cityToUpdate >= 0 && cityToUpdate < (int)cityCaches.size()) {
+      if (safeToRequest) {
+        Serial.printf("NETWORK: Updating City %d: %s\n", cityToUpdate,
+                      cityCaches[cityToUpdate].cityName.c_str());
+        lastNetworkRequestMs = now; // Update timestamp
 
-      if (needFetch || manualWeatherTrigger) {
-        manualWeatherTrigger = false;
-        Serial.printf("NETWORK: Fetching City %d: %s\n", targetCityIndex,
-                      cityCaches[targetCityIndex].cityName.c_str());
         WeatherData temp;
         float lat, lon;
         String res;
         String owmKey = NetworkManager::getOwmApiKey();
-        if (WeatherService::lookupCoordinates(
-                cityCaches[targetCityIndex].cityName, lat, lon, res, owmKey)) {
+
+        if (WeatherService::lookupCoordinates(cityCaches[cityToUpdate].cityName,
+                                              lat, lon, res, owmKey)) {
           if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
             temp.cityName =
-                (res.length() > 0) ? res : cityCaches[targetCityIndex].cityName;
-            cityCaches[targetCityIndex].data = temp;
-            cityCaches[targetCityIndex].lastUpdate = now;
-            cityCaches[targetCityIndex].hasData = true;
+                (res.length() > 0) ? res : cityCaches[cityToUpdate].cityName;
 
-            xSemaphoreTake(dataMutex, portMAX_DELAY);
-            weatherData = temp;
-            weatherDataUpdated = true;
-            xSemaphoreGive(dataMutex);
-            GuiController::clearCityChanged();
+            cityCaches[cityToUpdate].data = temp;
+            cityCaches[cityToUpdate].lastUpdate = now;
+            cityCaches[cityToUpdate].hasData = true;
+
+            // If we updated the currently active city, push to global
+            // immediately
+            if (cityToUpdate == targetCityIndex) {
+              xSemaphoreTake(dataMutex, portMAX_DELAY);
+              weatherData = temp;
+              weatherDataUpdated = true;
+              xSemaphoreGive(dataMutex);
+            }
+
+            // LED Logic: Only update LED for the First City (Index 0)
+            if (cityToUpdate == 0) {
+              LedController::update(temp);
+            }
           }
         }
+      } // End if (safeToRequest)
+    } // End if (cityToUpdate >= 0)
+
+    // If we just switched to a cached city (and didn't need update), load
+    // from cache
+    if (citySwitched && cityToUpdate != targetCityIndex &&
+        targetCityIndex >= 0 && cityCaches[targetCityIndex].hasData) {
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      weatherData = cityCaches[targetCityIndex].data;
+      weatherDataUpdated = true;
+      // Let's ensure LED is updated on switch too, BUT ONLY IF switching
+      // to Primary City
+      if (targetCityIndex == 0) {
+        LedController::update(weatherData);
       }
+      xSemaphoreGive(dataMutex);
     }
 
     // ---------------- BUS ----------------
     int targetBusIndex = GuiController::getBusIndex();
     bool stationChanged = GuiController::hasBusStationChanged();
+    if (stationChanged)
+      GuiController::clearBusStationChanged();
 
-    // Detect App Switch to Bus (Handled in main.cpp originally via "became
-    // active") We can expose `triggerBusUpdate` for that.
+    int busToUpdate = -1;
 
-    if (targetBusIndex >= 0 && targetBusIndex < (int)busCaches.size()) {
-      bool needFetch = false;
-
-      if (stationChanged) {
-        if (now - busCaches[targetBusIndex].lastUpdate > 60000 ||
-            busCaches[targetBusIndex].data.stopCode.isEmpty()) {
-          needFetch = true;
-        } else {
-          // Cache Hit
-          xSemaphoreTake(dataMutex, portMAX_DELAY);
-          busData = busCaches[targetBusIndex].data;
-          busDataUpdated = true;
-          xSemaphoreGive(dataMutex);
-          GuiController::clearBusStationChanged();
-        }
-      } else if (GuiController::isBusScreenActive()) {
-        if (now - busCaches[targetBusIndex].lastUpdate > 60000)
-          needFetch = true;
+    // Prioritize Manual Trigger or Change
+    if ((manualBusTrigger || (stationChanged && targetBusIndex >= 0)) &&
+        safeToRequest) {
+      if (manualBusTrigger ||
+          busCaches[targetBusIndex].data.stopCode.isEmpty() ||
+          (now - busCaches[targetBusIndex].lastUpdate > 60000)) {
+        busToUpdate = targetBusIndex;
+      } else {
+        // Cache Hit
+        xSemaphoreTake(dataMutex, portMAX_DELAY);
+        busData = busCaches[targetBusIndex].data;
+        busDataUpdated = true;
+        xSemaphoreGive(dataMutex);
       }
+      manualBusTrigger = false;
+    }
 
-      if (needFetch || manualBusTrigger) {
-        manualBusTrigger = false;
-        String stopId = busCaches[targetBusIndex].id;
+    // Background Updates (All Stops)
+    if (busToUpdate == -1) {
+      for (size_t i = 0; i < busCaches.size(); i++) {
+        // Update if never updated (startup) OR stale > 60s
+        if (busCaches[i].lastUpdate == 0 ||
+            (now - busCaches[i].lastUpdate > 60000)) {
+          busToUpdate = i;
+          break;
+        }
+      }
+    }
+
+    // Execute Update
+    if (busToUpdate >= 0 && busToUpdate < (int)busCaches.size()) {
+      if (safeToRequest) {
+        String stopId = busCaches[busToUpdate].id;
         Serial.printf("NETWORK: Updating Bus Stop %s...\n", stopId.c_str());
+        lastNetworkRequestMs = now;
+
         BusData tempBus;
         if (BusService::updateBusTimes(tempBus, stopId,
                                        NetworkManager::getAppId().c_str(),
                                        NetworkManager::getAppKey().c_str())) {
-          busCaches[targetBusIndex].data = tempBus;
-          busCaches[targetBusIndex].lastUpdate = now;
 
-          xSemaphoreTake(dataMutex, portMAX_DELAY);
-          busData = tempBus;
-          busDataUpdated = true;
-          xSemaphoreGive(dataMutex);
-          GuiController::clearBusStationChanged();
+          busCaches[busToUpdate].data = tempBus;
+          busCaches[busToUpdate].lastUpdate = now;
+
+          // Only push to global if it matches the ACTIVE target
+          if (busToUpdate == targetBusIndex) {
+            xSemaphoreTake(dataMutex, portMAX_DELAY);
+            busData = tempBus;
+            busDataUpdated = true;
+            xSemaphoreGive(dataMutex);
+          }
         }
       }
     }
 
     // ---------------- STOCK ----------------
-    if (now - lastStockUpdate > 300000 || manualStockTrigger) {
+    if ((now - lastStockUpdate > 300000 || manualStockTrigger) &&
+        safeToRequest) {
       manualStockTrigger = false;
       String syms = NetworkManager::getStockSymbols();
       if (syms.length() > 0) {
         Serial.println("NETWORK: Updating Stocks...");
+        lastNetworkRequestMs = now;
+
         std::vector<StockItem> items = StockService::getQuotes(syms);
         if (!items.empty()) {
           xSemaphoreTake(dataMutex, portMAX_DELAY);

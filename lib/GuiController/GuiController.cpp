@@ -278,7 +278,6 @@ void GuiController::handleScreenClick(lv_event_t *e) {
     if (busStopCount > 1) {
       currentBusIndex = (currentBusIndex + 1) % busStopCount;
       busStationChanged = true;
-      // showLoadingScreen removed as requested
     }
   }
 }
