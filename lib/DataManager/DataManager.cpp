@@ -2,6 +2,7 @@
 #include "GuiController.h"
 #include "LedController.h"
 #include "NetworkManager.h"
+#include <esp_task_wdt.h> // Hardware Watchdog
 
 // Defines
 SemaphoreHandle_t DataManager::dataMutex = NULL;
