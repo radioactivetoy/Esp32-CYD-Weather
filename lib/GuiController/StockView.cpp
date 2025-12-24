@@ -30,6 +30,8 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(header,
+                  LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
 
   lv_obj_t *title = lv_label_create(header);
   lv_label_set_text(title, "Market Ticker");
@@ -60,7 +62,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(list, 0, 0);
   lv_obj_set_style_pad_all(list, 0, 0); // Fix: Remove default padding
-  lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
 
   if (data.empty()) {
     lv_obj_t *lbl = lv_label_create(list);
@@ -86,6 +88,8 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       lv_obj_set_style_border_width(row, 2, 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_add_flag(row,
+                      LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
 
       // Symbol (Company Name) - Size 20, Left Mid
       lv_obj_t *sym = lv_label_create(row);
@@ -107,6 +111,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       lv_obj_set_style_border_width(right_box, 0, 0);
       lv_obj_set_style_pad_all(right_box, 0, 0);
       lv_obj_set_style_pad_row(right_box, 0, 0); // Remove gap to save space
+      lv_obj_clear_flag(right_box, LV_OBJ_FLAG_CLICKABLE);
 
       // Price - Size 20
       lv_obj_t *price = lv_label_create(right_box);

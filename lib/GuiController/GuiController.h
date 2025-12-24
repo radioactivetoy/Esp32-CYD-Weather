@@ -26,7 +26,8 @@ public:
   static void showLoadingScreen(const char *msg = nullptr);
   static void updateTime();                        // Efficient clock update
   static void setActiveTimeLabel(lv_obj_t *label); // New setter
-  static String sanitize(String text);             // Remove heavy accents
+  static const char *
+  sanitize(const String &text); // Remove heavy accents (Returns static buffer)
 
   static bool isBusScreenActive();
   static bool isStockScreenActive();

@@ -174,11 +174,15 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_border_width(header_row, 0, 0);
     lv_obj_set_style_pad_all(header_row, 5, 0);
 
+    lv_obj_clear_flag(header_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(header_row, LV_OBJ_FLAG_CLICKABLE |
+                                    LV_OBJ_FLAG_EVENT_BUBBLE |
+                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
+
     lv_obj_t *city_lbl = lv_label_create(header_row);
-    lv_label_set_text(city_lbl,
-                      data.cityName.length() > 0
-                          ? GuiController::sanitize(data.cityName).c_str()
-                          : "Unknown");
+    lv_label_set_text(city_lbl, data.cityName.length() > 0
+                                    ? GuiController::sanitize(data.cityName)
+                                    : "Unknown");
     lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
     lv_obj_set_style_text_font(city_lbl, &lv_font_montserrat_20, 0);
     lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -213,14 +217,17 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_pad_all(glass_card, 5, 0);
     lv_obj_set_style_pad_row(glass_card, 2,
                              0); // Minimize internal vertical gap
-    lv_obj_clear_flag(glass_card,
-                      LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(glass_card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(glass_card, LV_OBJ_FLAG_CLICKABLE |
+                                    LV_OBJ_FLAG_EVENT_BUBBLE |
+                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
 
     lv_obj_t *icon_wrap = lv_obj_create(glass_card);
     lv_obj_set_size(icon_wrap, 50, 50); // Reduced 60->50 to save vertical space
     lv_obj_set_style_bg_opa(icon_wrap, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(icon_wrap, 0, 0);
-    lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(icon_wrap,
+                      LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
     if (lv_obj_get_child(icon_wrap, 0))
       lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0),
@@ -236,7 +243,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(temp_row, 0, 0);
     lv_obj_set_style_pad_column(temp_row, 8, 0);
-    lv_obj_clear_flag(temp_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(temp_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     // Temp
     lv_obj_t *temp_lbl = lv_label_create(temp_row);
@@ -284,7 +291,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(desc_row, 0, 0);
     lv_obj_set_style_pad_top(desc_row, 2, 0);
-    lv_obj_clear_flag(desc_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(desc_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     // Weather Description
     lv_obj_t *desc_lbl = lv_label_create(desc_row);
@@ -315,8 +322,10 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_flex_align(details_cont, LV_FLEX_ALIGN_SPACE_BETWEEN,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(details_cont, 0, 0);
-    lv_obj_clear_flag(details_cont,
-                      LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(details_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(details_cont, LV_OBJ_FLAG_CLICKABLE |
+                                      LV_OBJ_FLAG_EVENT_BUBBLE |
+                                      LV_OBJ_FLAG_GESTURE_BUBBLE);
 
     auto add_pill = [&](const char *label, const char *value, uint32_t color) {
       lv_obj_t *pill = lv_obj_create(details_cont);
@@ -333,7 +342,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                             LV_FLEX_ALIGN_CENTER);
       lv_obj_set_style_pad_all(pill, 0, 0);
       lv_obj_set_style_pad_row(pill, 0, 0); // Added: Remove gap between lines
-      lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
       lv_obj_t *v = lv_label_create(pill);
       lv_label_set_text(v, value);
@@ -379,9 +388,9 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     bool isHourly = (forecastMode == 1);
 
     lv_obj_t *header = lv_label_create(bg_grad);
-    String headerText = GuiController::sanitize(data.cityName) +
-                        (isHourly ? " - Hourly" : " - 7 Days");
-    lv_label_set_text(header, headerText.c_str());
+    lv_label_set_text_fmt(header, "%s%s",
+                          GuiController::sanitize(data.cityName),
+                          (isHourly ? " - Hourly" : " - 7 Days"));
     lv_obj_set_style_text_font(header, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(header, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 10);
@@ -409,8 +418,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_border_width(row, 2, 0);   // 1->2
       lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
-      lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
+      lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE);
 
       // Time/Day
       lv_obj_t *time_lbl = lv_label_create(row);
@@ -497,8 +506,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else if (forecastMode == 3) {
     // === CHART VIEW ===
     lv_obj_t *title = lv_label_create(bg_grad);
-    String titleText = GuiController::sanitize(data.cityName) + " - 24h Temp";
-    lv_label_set_text(title, titleText.c_str());
+    lv_label_set_text_fmt(title, "%s - 24h Temp",
+                          GuiController::sanitize(data.cityName));
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 

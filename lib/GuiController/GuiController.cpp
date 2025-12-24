@@ -127,52 +127,52 @@ void GuiController::handle(uint32_t ms) {
   }
 }
 
-String GuiController::sanitize(String text) {
+const char *GuiController::sanitize(const String &text) {
   // Replace multi-byte UTF-8 sequences with single ASCII chars
   // Catalan/Spanish common chars
 
-  // Note: Arduino String .replace() works on single chars or substrings.
-  // We need to replace the UTF-8 bytes.
+  static String buf;
+  buf = text; // Copy to static buffer (reserves memory once)
 
   // c-cedilla
-  text.replace("\xC3\xA7", "c"); // ç
-  text.replace("\xC3\x87", "C"); // Ç
+  buf.replace("\xC3\xA7", "c"); // ç
+  buf.replace("\xC3\x87", "C"); // Ç
 
   // n-tilde
-  text.replace("\xC3\xB1", "n"); // ñ
-  text.replace("\xC3\x91", "N"); // Ñ
+  buf.replace("\xC3\xB1", "n"); // ñ
+  buf.replace("\xC3\x91", "N"); // Ñ
 
   // a-grave/acute
-  text.replace("\xC3\xA0", "a"); // à
-  text.replace("\xC3\xA1", "a"); // á
-  text.replace("\xC3\x80", "A"); // À
-  text.replace("\xC3\x81", "A"); // Á
+  buf.replace("\xC3\xA0", "a"); // à
+  buf.replace("\xC3\xA1", "a"); // á
+  buf.replace("\xC3\x80", "A"); // À
+  buf.replace("\xC3\x81", "A"); // Á
 
   // e-grave/acute
-  text.replace("\xC3\xA8", "e"); // è
-  text.replace("\xC3\xA9", "e"); // é
-  text.replace("\xC3\x88", "E"); // È
-  text.replace("\xC3\x89", "E"); // É
+  buf.replace("\xC3\xA8", "e"); // è
+  buf.replace("\xC3\xA9", "e"); // é
+  buf.replace("\xC3\x88", "E"); // È
+  buf.replace("\xC3\x89", "E"); // É
 
   // i-acute/dieresis
-  text.replace("\xC3\xAD", "i"); // í
-  text.replace("\xC3\xAF", "i"); // ï
-  text.replace("\xC3\x8D", "I"); // Í
-  text.replace("\xC3\x8F", "I"); // Ï
+  buf.replace("\xC3\xAD", "i"); // í
+  buf.replace("\xC3\xAF", "i"); // ï
+  buf.replace("\xC3\x8D", "I"); // Í
+  buf.replace("\xC3\x8F", "I"); // Ï
 
   // o-grave/acute
-  text.replace("\xC3\xB2", "o"); // ò
-  text.replace("\xC3\xB3", "o"); // ó
-  text.replace("\xC3\x92", "O"); // Ò
-  text.replace("\xC3\x93", "O"); // Ó
+  buf.replace("\xC3\xB2", "o"); // ò
+  buf.replace("\xC3\xB3", "o"); // ó
+  buf.replace("\xC3\x92", "O"); // Ò
+  buf.replace("\xC3\x93", "O"); // Ó
 
   // u-acute/dieresis
-  text.replace("\xC3\xBA", "u"); // ú
-  text.replace("\xC3\xBC", "u"); // ü
-  text.replace("\xC3\x9A", "U"); // Ú
-  text.replace("\xC3\x9C", "U"); // Ü
+  buf.replace("\xC3\xBA", "u"); // ú
+  buf.replace("\xC3\xBC", "u"); // ü
+  buf.replace("\xC3\x9A", "U"); // Ú
+  buf.replace("\xC3\x9C", "U"); // Ü
 
-  return text;
+  return buf.c_str();
 }
 
 // --- DELEGATED VIEW METHODS ---
@@ -209,6 +209,12 @@ void GuiController::updateTime() {
     activeTimeLabel = NULL;
     return;
   }
+
+  static uint32_t lastTimeUpdate = 0;
+  if (millis() - lastTimeUpdate < 1000)
+    return; // Throttle to 1s
+  lastTimeUpdate = millis();
+
   struct tm timeinfo;
   if (getLocalTime(&timeinfo, 10)) {
     char timeStr[32];

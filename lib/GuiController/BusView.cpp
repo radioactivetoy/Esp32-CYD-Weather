@@ -59,7 +59,7 @@ void BusView::show(const BusData &data, int anim) {
 
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {
-    lv_label_set_text(title, GuiController::sanitize(data.stopName).c_str());
+    lv_label_set_text(title, GuiController::sanitize(data.stopName));
   } else {
     lv_label_set_text_fmt(title, "Stop: %s", data.stopCode.c_str());
   }
@@ -129,7 +129,8 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_style_bg_color(lineBox, badgeCol, 0);
       lv_obj_set_style_radius(lineBox, 4, 0);
       lv_obj_set_style_border_width(lineBox, 0, 0);
-      lv_obj_clear_flag(lineBox, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_clear_flag(lineBox,
+                        LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
       lv_obj_t *lineLbl = lv_label_create(lineBox);
       lv_label_set_text(lineLbl, arr.line.c_str());
@@ -138,7 +139,7 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_style_text_font(lineLbl, &lv_font_montserrat_14, 0);
 
       lv_obj_t *dest = lv_label_create(row);
-      lv_label_set_text(dest, GuiController::sanitize(arr.destination).c_str());
+      lv_label_set_text(dest, GuiController::sanitize(arr.destination));
       lv_obj_set_flex_grow(dest, 1);
       lv_label_set_long_mode(dest, LV_LABEL_LONG_SCROLL_CIRCULAR);
       lv_obj_set_style_text_color(dest, lv_color_hex(0xDDDDDD), 0);
