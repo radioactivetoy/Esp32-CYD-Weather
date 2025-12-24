@@ -1,6 +1,6 @@
 # ESP32 Weather & Bus Clock (CYD)
 
-A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Yellow Display). It shows real-time weather from Open-Meteo, TMB (Transports Metropolitans de Barcelona) bus arrival times, and Stock/Crypto prices.
+A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Yellow Display). It shows real-time weather from OpenWeatherMap, TMB (Transports Metropolitans de Barcelona) bus arrival times, and Stock/Crypto prices.
 
 ## 🎮 Controls & Navigation
 
@@ -17,9 +17,11 @@ The interface relies on intuitive **Touch Gestures**:
 ## ✨ Features (Polished)
 
 1.  **Multi-City Weather**:
-    *   **Current**: Design-foward "Glassmorphism" card with Pills (Humidity, Wind, AQI).
+    *   **Source**: OpenWeatherMap (5-Day / 3-Hour Forecast API).
+    *   **Current**: Design-foward "Glassmorphism" card with Pills (Humidity, Wind, Pressure, AQI).
+    *   **Rain Probability**: Shown in blue appended to description (e.g., "Overcast 30%") and in forecast lists.
     *   **Hourly**: Scrollable list of 24h forecast.
-    *   **Daily**: 7-Day forecast with high/low temps.
+    *   **Daily**: 7-Day forecast with high/low temps and mid-day icons.
     *   **Graph**: 24h Temperature Trend visualization.
     *   **Unified Header**: Clean 40px Header (Title Left, Time Right) matches all apps.
 
@@ -33,7 +35,7 @@ The interface relies on intuitive **Touch Gestures**:
     *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen.
 
 3.  **Stock/Crypto Ticker**:
-    *   **Real-time Prices**: Yahoo Finance API.
+    *   **Real-time Prices**: Finnhub API.
     *   **Trend Tracking**: Green/Red indicators for price changes.
     *   **Clean List**: Scrollable view of all configured symbols.
 
@@ -77,7 +79,7 @@ No need to edit code! Configure everything via the web interface.
         -   **Night Mode**: Enable auto-dimming between specific hours.
     -   **Timezone**: Select your local time.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
-    -   **API Keys**: Enter your TMB App ID/Key and Finnhub API Key.
+    -   **API Keys**: Enter your TMB App ID/Key, Finnhub API Key, and OpenWeatherMap API Key.
 
 ## Controls
 -   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).
@@ -90,8 +92,10 @@ No need to edit code! Configure everything via the web interface.
     -   Displays configured stock quotes with real-time price/change.
 
 ## Recent Updates
+-   **OpenWeatherMap Migration**: Fully replaced Open-Meteo for Forecasts, Geocoding, and AQI for better accuracy.
+-   **Enhanced Rain UI**: Rain probability now displayed alongside weather description and in forecast lists.
 -   **Configurable Backlight**: Set specific brightness levels for Day and Night modes via Web UI.
--   **Enhanced UI**: High-contrast 2px borders and optimized layouts for better visibility.
+-   **UI Refinements**: High-contrast 2px borders, optimized layouts, centered temperature, and standardized fonts.
 -   **Touch Navigation**: Simplified Bus Station switching via tap.
 -   **Stock View**: Improved row spacing (70px) and font sizing to prevent text clipping.
 
@@ -100,7 +104,7 @@ No need to edit code! Configure everything via the web interface.
 You need free API keys for data sources:
 -   **TMB API**: Register at [developer.tmb.cat](https://developer.tmb.cat/) (Bus Data).
 -   **Finnhub**: Register at [finnhub.io](https://finnhub.io/) (Stock Data).
--   *Weather data (Open-Meteo) is free and key-less.*
+-   **OpenWeatherMap**: Register at [openweathermap.org](https://openweathermap.org/) (Weather Data).
 
 ## Project Structure
 
@@ -109,6 +113,6 @@ You need free API keys for data sources:
 -   `lib/NetworkManager`: WiFi, NTP, NVS Storage, and Web Server.
 -   `lib/BusService`: TMB API client.
 -   `lib/StockService`: Finnhub API client.
--   `lib/WeatherService`: Open-Meteo API client.
+-   `lib/WeatherService`: OpenWeatherMap API client.
 -   `lib/LedController`: RGB LED management and alerts.
 -   `lib/TouchDrv`: Driver for CST820/CST816S touch controller.
