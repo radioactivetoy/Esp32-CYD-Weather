@@ -29,6 +29,7 @@ struct WeatherData {
   int currentAQI;
   float windSpeed;
   int windDirection;
+  bool isNight;           // New: For icon selection
   float yesterdayMaxTemp; // Added for Main Screen Trend
   DailyForecast daily[7];
   HourlyForecast hourly[24];

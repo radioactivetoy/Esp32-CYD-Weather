@@ -44,7 +44,7 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
         "&longitude=" + String(lon) +
         "&current=temperature_2m,relative_humidity_2m,apparent_"
         "temperature,"
-        "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m" +
+        "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day" +
         "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
         "&hourly=temperature_2m,weather_code&timezone=auto&past_days="
         "1"; // Added past_days=1
@@ -75,6 +75,10 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
         data.currentWeatherCode = current["weather_code"];
         data.windSpeed = current["wind_speed_10m"];
         data.windDirection = current["wind_direction_10m"];
+
+        // Night Detection
+        int isDay = current["is_day"];
+        data.isNight = (isDay == 0);
 
         // Capture Yesterday's Max (Index 0)
         data.yesterdayMaxTemp = doc["daily"]["temperature_2m_max"][0];
@@ -248,6 +252,7 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
 
         // Icon Mapping
         String icon = doc["weather"][0]["icon"].as<String>();
+        data.isNight = icon.endsWith("n");
         int wmo = 3; // Default Overcast
 
         if (icon.startsWith("01"))

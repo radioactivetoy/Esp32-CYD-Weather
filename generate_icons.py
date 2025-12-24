@@ -23,6 +23,8 @@ ICON_URLS = {
     "weather_icon_rain": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-rain.svg',
     "weather_icon_snow": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-snow.svg',
     "weather_icon_thunder": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-thunderstorm.svg',
+    "weather_icon_moon": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-night-clear.svg',
+    "weather_icon_night_part_cloud": 'https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/wi-night-alt-partly-cloudy.svg',
     "bus_icon": 'https://icons.getbootstrap.com/assets/icons/bus-front.svg'
 }
 

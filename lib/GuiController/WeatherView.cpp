@@ -61,17 +61,27 @@ const char *WeatherView::getWeatherDesc(int code) {
   }
 }
 
-void WeatherView::createWeatherIcon(lv_obj_t *parent, int code) {
+void WeatherView::createWeatherIcon(lv_obj_t *parent, int code, bool isNight) {
   lv_obj_clean(parent);
   const void *src = &weather_icon_cloud;
   lv_color_t color = lv_color_hex(0xFFFFFF);
 
   if (code == 0) {
-    src = &weather_icon_sun;
-    color = lv_color_hex(0xFFD700);
+    if (isNight) {
+      src = &weather_icon_moon;
+      color = lv_color_hex(0xEEEEEE); // Moon color
+    } else {
+      src = &weather_icon_sun;
+      color = lv_color_hex(0xFFD700);
+    }
   } else if (code == 1 || code == 2) {
-    src = &weather_icon_part_cloud;
-    color = lv_color_hex(0xFFEEAA);
+    if (isNight) {
+      src = &weather_icon_night_part_cloud;
+      color = lv_color_hex(0xDDDDDD); // Night cloud
+    } else {
+      src = &weather_icon_part_cloud;
+      color = lv_color_hex(0xFFEEAA);
+    }
   } else if (code == 3) {
     src = &weather_icon_cloud;
     color = lv_color_hex(0xEEEEEE);
@@ -209,7 +219,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_bg_opa(icon_wrap, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(icon_wrap, 0, 0);
     lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE);
-    createWeatherIcon(icon_wrap, data.currentWeatherCode);
+    createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
     if (lv_obj_get_child(icon_wrap, 0))
       lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0),
                       220); // Zoom 256->220 (approx 0.85x)
@@ -408,8 +418,10 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_pad_all(icon_box, 0, 0);
       lv_obj_clear_flag(icon_box,
                         LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-      createWeatherIcon(icon_box, isHourly ? data.hourly[i].weatherCode
-                                           : data.daily[i].weatherCode);
+      createWeatherIcon(icon_box,
+                        isHourly ? data.hourly[i].weatherCode
+                                 : data.daily[i].weatherCode,
+                        false);
       if (lv_obj_get_child(icon_box, 0))
         lv_img_set_zoom(lv_obj_get_child(icon_box, 0), 160);
 
