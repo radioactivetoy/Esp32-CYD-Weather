@@ -24,6 +24,7 @@ public:
   static bool getNightModeEnabled();
   static int getNightStart();
   static int getNightEnd();
+  static String getOwmApiKey();
 
   static int getDayBrightness();
   static int getNightBrightness();
@@ -46,6 +47,7 @@ private:
   static bool nightMode;
   static int nightStart;
   static int nightEnd;
+  static String owmApiKey;
   static int dayBrightness;
   static int nightBrightness;
   static String stockSymbols;

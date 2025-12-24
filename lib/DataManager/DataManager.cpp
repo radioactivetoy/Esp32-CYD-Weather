@@ -3,7 +3,6 @@
 #include "LedController.h"
 #include "NetworkManager.h"
 
-
 // Defines
 SemaphoreHandle_t DataManager::dataMutex = NULL;
 
@@ -146,7 +145,8 @@ void DataManager::networkTask(void *parameter) {
   bool primarySuccess = false;
 
   if (WeatherService::lookupCoordinates(cities[0], pLat, pLon, pResolved)) {
-    if (WeatherService::updateWeather(tempWeather, pLat, pLon)) {
+    String owmKey = NetworkManager::getOwmApiKey();
+    if (WeatherService::updateWeather(tempWeather, pLat, pLon, owmKey)) {
       tempWeather.cityName = (pResolved.length() > 0) ? pResolved : cities[0];
 
       cityCaches[0].data = tempWeather;
@@ -204,7 +204,8 @@ void DataManager::networkTask(void *parameter) {
       String res;
       if (WeatherService::lookupCoordinates(cityCaches[0].cityName, lat, lon,
                                             res)) {
-        if (WeatherService::updateWeather(temp, lat, lon)) {
+        String owmKey = NetworkManager::getOwmApiKey();
+        if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
           temp.cityName = (res.length() > 0) ? res : cityCaches[0].cityName;
           cityCaches[0].data = temp;
           cityCaches[0].lastUpdate = now;
@@ -252,7 +253,8 @@ void DataManager::networkTask(void *parameter) {
         String res;
         if (WeatherService::lookupCoordinates(
                 cityCaches[targetCityIndex].cityName, lat, lon, res)) {
-          if (WeatherService::updateWeather(temp, lat, lon)) {
+          String owmKey = NetworkManager::getOwmApiKey();
+          if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
             temp.cityName =
                 (res.length() > 0) ? res : cityCaches[targetCityIndex].cityName;
             cityCaches[targetCityIndex].data = temp;

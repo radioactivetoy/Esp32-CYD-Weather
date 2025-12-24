@@ -25,14 +25,12 @@ int calculateMoonPhase(int year, int month, int day) {
   return b;
 }
 
-bool WeatherService::updateWeather(WeatherData &data, float lat, float lon) {
+bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
+                                   String owmApiKey) {
   if (WiFi.status() != WL_CONNECTED)
     return false;
 
   bool weatherSuccess = false;
-#include <WiFiClientSecure.h> // Ensure this is included at top if not already
-
-  // ... (inside updateWeather)
 
   // 1. Weather Forecast
   {
@@ -146,6 +144,11 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon) {
     http.end();
   }
 
+  // 3. Hybrid: Overwrite Current Weather with OpenWeatherMap if Key is present
+  if (weatherSuccess && owmApiKey.length() > 0) {
+    updateCurrentWeatherOWM(data, lat, lon, owmApiKey);
+  }
+
   return true;
 }
 
@@ -209,6 +212,76 @@ bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
     return true;
   }
 
+  http.end();
+  return false;
+}
+
+bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
+                                             float lon, String apiKey) {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  String url =
+      "https://api.openweathermap.org/data/2.5/weather?lat=" + String(lat) +
+      "&lon=" + String(lon) + "&appid=" + apiKey + "&units=metric";
+
+  Serial.println("Fetching OWM Current: " + url);
+  http.begin(client, url);
+  http.setConnectTimeout(5000);
+  http.setTimeout(5000);
+
+  int code = http.GET();
+  if (code > 0) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, http.getStream());
+    if (!error) {
+      if (doc.containsKey("main")) {
+        // Overwrite Data
+        data.currentTemp = doc["main"]["temp"];
+        data.currentHumidity = doc["main"]["humidity"];
+        data.currentPressure = doc["main"]["pressure"];
+        data.currentFeelsLike = doc["main"]["feels_like"];
+        data.windSpeed = doc["wind"]["speed"]; // m/s
+        data.windSpeed *= 3.6;                 // Convert to km/h
+        data.windDirection = doc["wind"]["deg"];
+
+        // Icon Mapping
+        String icon = doc["weather"][0]["icon"].as<String>();
+        int wmo = 3; // Default Overcast
+
+        if (icon.startsWith("01"))
+          wmo = 0; // Clear
+        else if (icon.startsWith("02"))
+          wmo = 1; // Few Clouds
+        else if (icon.startsWith("03"))
+          wmo = 2; // Scattered
+        else if (icon.startsWith("04"))
+          wmo = 3; // Broken
+        else if (icon.startsWith("09"))
+          wmo = 80; // Shower Rain
+        else if (icon.startsWith("10"))
+          wmo = 61; // Rain
+        else if (icon.startsWith("11"))
+          wmo = 95; // Thunder
+        else if (icon.startsWith("13"))
+          wmo = 71; // Snow
+        else if (icon.startsWith("50"))
+          wmo = 45; // Mist
+
+        data.currentWeatherCode = wmo;
+        Serial.printf("OWM Update Success: Temp=%.1f Icon=%s WMO=%d\n",
+                      data.currentTemp, icon.c_str(), wmo);
+        http.end();
+        return true;
+      }
+    } else {
+      Serial.print("OWM JSON Error: ");
+      Serial.println(error.c_str());
+    }
+  } else {
+    Serial.printf("OWM HTTP Error: %d\n", code);
+  }
   http.end();
   return false;
 }

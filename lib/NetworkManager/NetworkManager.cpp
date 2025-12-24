@@ -13,9 +13,11 @@ int NetworkManager::dayBrightness = 100;
 int NetworkManager::nightBrightness = 10;
 String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
 String NetworkManager::ledBrightness = "medium";
+String NetworkManager::owmApiKey = "";
 WebServer NetworkManager::server(80);
 
 String NetworkManager::getLedBrightness() { return ledBrightness; }
+String NetworkManager::getOwmApiKey() { return owmApiKey; }
 int NetworkManager::getDayBrightness() { return dayBrightness; }
 int NetworkManager::getNightBrightness() { return nightBrightness; }
 
@@ -88,7 +90,10 @@ void NetworkManager::handleRoot() {
   html += "TMB App ID:<br><input type='text' name='appId' value='" + appId +
           "'><br>";
   html += "TMB App Key:<br><input type='text' name='appKey' value='" + appKey +
-          "'><br><br>";
+          "'><br>";
+  html +=
+      "OWM API Key (Optional):<br><input type='text' name='owmApiKey' value='" +
+      owmApiKey + "'><br><br>";
 
   // Improvements
   html += "<h3>Lighting</h3>";
@@ -211,6 +216,7 @@ void NetworkManager::handleSave() {
     busStop = server.arg("busStop");
     String appId = server.arg("appId");
     String appKey = server.arg("appKey");
+    owmApiKey = server.arg("owmApiKey");
 
     // New Params
     timezone = server.arg("timezone");
@@ -229,6 +235,7 @@ void NetworkManager::handleSave() {
     prefs.putString("busStop", busStop);
     prefs.putString("app_id", appId);
     prefs.putString("app_key", appKey);
+    prefs.putString("owmApiKey", owmApiKey);
 
     prefs.putString("timezone", timezone);
     prefs.putBool("nightMode", nightMode);
@@ -291,6 +298,9 @@ void NetworkManager::begin() {
   // Load Stocks
   stockSymbols = prefs.getString("stockSymbols", "AAPL,BTC-USD,GRF.MC");
   ledBrightness = prefs.getString("ledBrightness", "medium");
+
+  // Custom Keys
+  owmApiKey = prefs.getString("owmApiKey", "");
 
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);

@@ -36,8 +36,13 @@ struct WeatherData {
 
 class WeatherService {
 public:
-  static bool updateWeather(WeatherData &data, float lat, float lon);
+  static bool updateWeather(WeatherData &data, float lat, float lon,
+                            String owmApiKey = "");
   static bool lookupCoordinates(String cityName, float &lat, float &lon,
                                 String &resolvedName);
   static const char *getAQIDesc(int aqi);
+
+private:
+  static bool updateCurrentWeatherOWM(WeatherData &data, float lat, float lon,
+                                      String apiKey);
 };
