@@ -150,6 +150,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_set_style_bg_grad_dir(bg_grad, LV_GRAD_DIR_VER, 0);
   lv_obj_set_style_bg_opa(bg_grad, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(bg_grad, 0, 0);
+  lv_obj_set_style_pad_all(bg_grad, 0, 0); // Fix: Remove default padding
   lv_obj_clear_flag(bg_grad, LV_OBJ_FLAG_SCROLLABLE);
 
   // Click & Gesture Handlers
@@ -168,6 +169,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     // === CURRENT WEATHER ===
     lv_obj_t *header_row = lv_obj_create(bg_grad);
     lv_obj_set_size(header_row, LV_PCT(100), 40);
+    lv_obj_align(header_row, LV_ALIGN_TOP_MID, 0, 0); // Fix: Explicit Align
     lv_obj_set_style_bg_opa(header_row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(header_row, 0, 0);
     lv_obj_set_style_pad_all(header_row, 5, 0);
@@ -178,7 +180,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                           ? GuiController::sanitize(data.cityName).c_str()
                           : "Unknown");
     lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
-    lv_obj_set_style_text_font(city_lbl, GuiController::safe_font_16, 0);
+    lv_obj_set_style_text_font(city_lbl, GuiController::safe_font_20, 0);
     lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
     struct tm timeinfo;

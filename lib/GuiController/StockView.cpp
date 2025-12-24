@@ -52,10 +52,11 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   // List
   lv_obj_t *list = lv_obj_create(new_scr);
   lv_obj_set_size(list, LV_PCT(100), 280);
-  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40);
+  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 30);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(list, 0, 0);
+  lv_obj_set_style_pad_all(list, 0, 0); // Fix: Remove default padding
   lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE);
 
   if (data.empty()) {
