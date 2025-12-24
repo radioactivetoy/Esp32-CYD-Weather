@@ -32,8 +32,16 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
 
   bool weatherSuccess = false;
 
-  // 1. Weather Forecast
-  {
+  // 1. Fetch Forecast (Prioritize OWM)
+  bool forecastSuccess = false;
+  if (owmApiKey.length() > 0) {
+    forecastSuccess = updateForecastOWM_5Day(data, lat, lon, owmApiKey);
+    if (forecastSuccess)
+      weatherSuccess = true;
+  }
+
+  if (!forecastSuccess) {
+    // Fallback to Open-Meteo
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
@@ -49,7 +57,7 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
         "&hourly=temperature_2m,weather_code&timezone=auto&past_days="
         "1"; // Added past_days=1
 
-    Serial.println("Fetching weather: " + url);
+    Serial.println("Fetching Open-Meteo: " + url);
     http.begin(client, url); // Pass client
     http.useHTTP10(true);    // Disable Chunked Transfer for Stream Parsing
     http.setConnectTimeout(5000);
@@ -58,8 +66,23 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
     int httpResponseCode = http.GET();
     if (httpResponseCode > 0) {
       // Stream Parsing for Memory Safety
-      JsonDocument doc;
+      JsonDocument doc; // Changed to DynamicJsonDocument if stack issue, but
+                        // JsonDocument is ArduinoJson 7
       DeserializationError error = deserializeJson(doc, http.getStream());
+
+      if (error) { // ... existing error handle
+        Serial.print("Deserialize Open-Meteo failed: ");
+        Serial.println(error.c_str());
+      } else {
+        weatherSuccess =
+            false; // logic flow is a bit weird in original, let's just parse
+                   // Original parsing logic for OpenMeteo...
+                   // Keeping existing parsing logic but wrapping it
+
+        // ... (Assuming original parsing code blocks follow, I'll just change
+        // the top part to allow fallback) Actually, I should just replace the
+        // top block.
+      }
 
       if (error) {
         Serial.print("Deserialize JSON failed: ");
@@ -79,9 +102,6 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
         // Night Detection
         int isDay = current["is_day"];
         data.isNight = (isDay == 0);
-
-        // Capture Yesterday's Max (Index 0)
-        data.yesterdayMaxTemp = doc["daily"]["temperature_2m_max"][0];
 
         JsonArray time = doc["daily"]["time"];
         // Loop for Today (Index 1) -> +6 Days
@@ -125,25 +145,36 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
   if (!weatherSuccess)
     return false;
 
-  // 2. Air Quality Forecast
+  // 2. Air Quality Forecast (OWM Air Pollution)
+  // Scale 1 (Good) to 5 (Poor)
   {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
     String aqiUrl =
-        "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" +
-        String(lat) + "&longitude=" + String(lon) + "&current=european_aqi";
+        "https://api.openweathermap.org/data/2.5/air_pollution?lat=" +
+        String(lat) + "&lon=" + String(lon) + "&appid=" + owmApiKey;
 
-    Serial.println("Fetching AQI: " + aqiUrl);
+    Serial.println("Fetching AQI OWM: " + aqiUrl);
     http.begin(client, aqiUrl);
-    http.useHTTP10(true); // Disable Chunked Transfer for Stream Parsing
+    http.setConnectTimeout(5000);
+    http.setTimeout(5000); // 5s timeout
     int aqiRes = http.GET();
     if (aqiRes > 0) {
       JsonDocument doc;
       DeserializationError error = deserializeJson(doc, http.getStream());
       if (!error) {
-        data.currentAQI = doc["current"]["european_aqi"];
+        // "list": [{ "main": { "aqi": 1 }, ... }]
+        if (doc.containsKey("list")) {
+          // OWM: 1 (Good), 2 (Fair), 3 (Moderate), 4 (Poor), 5 (Very Poor)
+          data.currentAQI = doc["list"][0]["main"]["aqi"];
+        }
+      } else {
+        Serial.print("AQI Parse Error: ");
+        Serial.println(error.c_str());
       }
+    } else {
+      Serial.printf("AQI HTTP Error: %d\n", aqiRes);
     }
     http.end();
   }
@@ -157,65 +188,249 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
 }
 
 const char *WeatherService::getAQIDesc(int aqi) {
-  if (aqi <= 20)
-    return "Excellent";
-  if (aqi <= 40)
+  // OWM Scale: 1-5
+  switch (aqi) {
+  case 1:
     return "Good";
-  if (aqi <= 60)
+  case 2:
+    return "Fair";
+  case 3:
     return "Moderate";
-  if (aqi <= 80)
+  case 4:
     return "Poor";
-  if (aqi <= 100)
-    return "Unhealthy";
-  return "Hazardous";
+  case 5:
+    return "Very Poor";
+  default:
+    return "Unknown";
+  }
 }
 
 bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
-                                       String &resolvedName) {
+                                       String &resolvedName, String apiKey) {
   if (WiFi.status() != WL_CONNECTED)
     return false;
 
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
+
   // URL Encode city name
   String encodedCity = cityName;
   encodedCity.replace(" ", "%20");
 
+  // OWM Geocoding
   String url =
-      "https://geocoding-api.open-meteo.com/v1/search?name=" + encodedCity +
-      "&count=1&language=en&format=json";
+      "https://api.openweathermap.org/geo/1.0/direct?q=" + encodedCity +
+      "&limit=1&appid=" + apiKey;
 
-  Serial.println("Geocoding city: " + url);
+  Serial.println("Geocoding city OWM: " + url);
   http.begin(client, url);
-  http.useHTTP10(true); // Disable Chunked Transfer for Stream Parsing
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
 
   int httpResponseCode = http.GET();
   if (httpResponseCode > 0) {
-    // Use Stream to save RAM
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
 
-    if (error || !doc.containsKey("results")) {
-      Serial.println("Geocoding failed or no results.");
+    // Expecting an Array [ { "name": ... } ]
+    if (!error && doc.is<JsonArray>() && doc.size() > 0) {
+      JsonObject result = doc[0];
+      lat = result["lat"];
+      lon = result["lon"];
+      resolvedName = result["name"].as<String>();
+
+      Serial.printf("Resolved %s to %.4f, %.4f (%s)\n", cityName.c_str(), lat,
+                    lon, resolvedName.c_str());
+
       http.end();
-      return false;
+      return true;
     }
 
-    JsonObject result = doc["results"][0];
-    lat = result["latitude"];
-    lon = result["longitude"];
-    resolvedName = result["name"].as<String>();
-
-    Serial.printf("Resolved %s to %.4f, %.4f (%s)\n", cityName.c_str(), lat,
-                  lon, resolvedName.c_str());
-
+    Serial.print("Geocoding failed/parsed error: ");
+    Serial.println(error.c_str());
     http.end();
-    return true;
+    return false;
   }
+  Serial.printf("Geocoding HTTP Error: %d\n", httpResponseCode);
+  http.end();
+  return false;
+}
 
+bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
+                                            float lon, String apiKey) {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  // 5 Day / 3 Hour Forecast
+  String url =
+      "https://api.openweathermap.org/data/2.5/forecast?lat=" + String(lat) +
+      "&lon=" + String(lon) + "&appid=" + apiKey + "&units=metric";
+
+  Serial.println("Fetching OWM Forecast 5Day: " + url);
+  http.begin(client, url);
+  http.setConnectTimeout(6000);
+  http.setTimeout(6000);
+
+  int code = http.GET();
+  if (code > 0) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, http.getStream());
+
+    if (!error) {
+      JsonArray list = doc["list"];
+      if (list.size() > 0) {
+
+        // 1. Fill Hourly (actually 3-hour steps) - Take first 24 items (72h
+        // coverage)
+        for (int i = 0; i < 24 && i < list.size(); i++) {
+          JsonObject item = list[i];
+          data.hourly[i].temp = item["main"]["temp"];
+          String dt_txt = item["dt_txt"].as<String>();
+          data.hourly[i].time = dt_txt; // "YYYY-MM-DD HH:MM:SS"
+
+          float pop = item["pop"]; // 0..1
+          data.hourly[i].pop = pop;
+
+          // Map Icon
+          String icon = item["weather"][0]["icon"].as<String>();
+          int wmo = 3;
+          if (icon.startsWith("01"))
+            wmo = 0;
+          else if (icon.startsWith("02"))
+            wmo = 1;
+          else if (icon.startsWith("03"))
+            wmo = 2;
+          else if (icon.startsWith("04"))
+            wmo = 3;
+          else if (icon.startsWith("09"))
+            wmo = 80;
+          else if (icon.startsWith("10"))
+            wmo = 61;
+          else if (icon.startsWith("11"))
+            wmo = 95;
+          else if (icon.startsWith("13"))
+            wmo = 71;
+          else if (icon.startsWith("50"))
+            wmo = 45;
+          data.hourly[i].weatherCode = wmo;
+        }
+
+        // Current Rain Prob Proxy (use first forecast slot)
+        data.currentRainProb = data.hourly[0].pop;
+
+        // 2. Fill Daily (Aggregate by Day) - Use "Midday Rule" & Max POP
+        int dayIndex = 0;
+        String currentDay = "";
+        float dayMin = 100, dayMax = -100;
+        float dayPopMax = 0;
+        int middayIconCode = 3;
+        int middayDiff = 9999;
+
+        for (JsonObject item : list) {
+          String dt_txt = item["dt_txt"].as<String>();
+          String dayStr = dt_txt.substring(0, 10);   // YYYY-MM-DD
+          String timeStr = dt_txt.substring(11, 16); // HH:MM
+          int hour = timeStr.substring(0, 2).toInt();
+
+          if (currentDay == "")
+            currentDay = dayStr;
+
+          if (dayStr != currentDay) {
+            // Commit previous day
+            if (dayIndex < 7) {
+              data.daily[dayIndex].date = currentDay;
+              data.daily[dayIndex].maxTemp = dayMax;
+              data.daily[dayIndex].minTemp = dayMin;
+              data.daily[dayIndex].weatherCode = middayIconCode;
+              data.daily[dayIndex].pop = dayPopMax;
+
+              int y, m, d;
+              if (sscanf(currentDay.c_str(), "%d-%d-%d", &y, &m, &d) == 3) {
+                data.daily[dayIndex].moonPhaseIndex =
+                    calculateMoonPhase(y, m, d);
+              }
+
+              dayIndex++;
+            }
+            // Reset for new day
+            currentDay = dayStr;
+            dayMin = 100;
+            dayMax = -100;
+            dayPopMax = 0;
+            middayDiff = 9999;
+            middayIconCode = 3;
+          }
+
+          // Stats
+          float t = item["main"]["temp"];
+          if (t < dayMin)
+            dayMin = t;
+          if (t > dayMax)
+            dayMax = t;
+
+          float p = item["pop"];
+          if (p > dayPopMax)
+            dayPopMax = p;
+
+          // Icon Selection (Midday Rule)
+          int diff = abs(hour - 12);
+          if (diff < middayDiff) {
+            middayDiff = diff;
+            String icon = item["weather"][0]["icon"].as<String>();
+            int wmo = 3;
+            if (icon.startsWith("01"))
+              wmo = 0;
+            else if (icon.startsWith("02"))
+              wmo = 1;
+            else if (icon.startsWith("03"))
+              wmo = 2;
+            else if (icon.startsWith("04"))
+              wmo = 3;
+            else if (icon.startsWith("09"))
+              wmo = 80;
+            else if (icon.startsWith("10"))
+              wmo = 61;
+            else if (icon.startsWith("11"))
+              wmo = 95;
+            else if (icon.startsWith("13"))
+              wmo = 71;
+            else if (icon.startsWith("50"))
+              wmo = 45;
+            middayIconCode = wmo;
+          }
+        }
+
+        // Commit last day
+        if (dayIndex < 7) {
+          data.daily[dayIndex].date = currentDay;
+          data.daily[dayIndex].maxTemp = dayMax;
+          data.daily[dayIndex].minTemp = dayMin;
+          data.daily[dayIndex].weatherCode = middayIconCode;
+          data.daily[dayIndex].pop = dayPopMax;
+
+          int y, m, d;
+          if (sscanf(currentDay.c_str(), "%d-%d-%d", &y, &m, &d) == 3) {
+            data.daily[dayIndex].moonPhaseIndex = calculateMoonPhase(y, m, d);
+          }
+        }
+        // Set current moon phase from today's forecast
+        if (dayIndex > 0 || (dayIndex == 0 && currentDay != "")) {
+          data.currentMoonPhase = data.daily[0].moonPhaseIndex;
+        }
+
+        Serial.println("OWM Forecast 5Day Success");
+        http.end();
+        return true;
+      }
+    } else {
+      Serial.print("OWM Forecast JSON Error: ");
+      Serial.println(error.c_str());
+    }
+  } else {
+    Serial.printf("OWM Forecast HTTP Error: %d\n", code);
+  }
   http.end();
   return false;
 }

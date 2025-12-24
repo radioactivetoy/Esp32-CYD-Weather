@@ -180,7 +180,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                           ? GuiController::sanitize(data.cityName).c_str()
                           : "Unknown");
     lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
-    lv_obj_set_style_text_font(city_lbl, GuiController::safe_font_20, 0);
+    lv_obj_set_style_text_font(city_lbl, &lv_font_montserrat_20, 0);
     lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
     struct tm timeinfo;
@@ -190,7 +190,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *time_lbl = lv_label_create(header_row);
       lv_label_set_text(time_lbl, timeStr);
       lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xAAAAAA), 0);
-      lv_obj_set_style_text_font(time_lbl, GuiController::safe_font_20,
+      lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20,
                                  0); // Upgrade Clock 14->20
       lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
       GuiController::setActiveTimeLabel(time_lbl); // Register
@@ -238,33 +238,19 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_pad_column(temp_row, 8, 0);
     lv_obj_clear_flag(temp_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Left Arrow (Trend vs Yesterday)
-    lv_obj_t *arrow_l = lv_label_create(temp_row);
-    float diffL = data.daily[0].maxTemp - data.yesterdayMaxTemp;
-    Serial.printf("TREND DEBUG: Yest: %.1f, Today: %.1f, Diff: %.1f\n",
-                  data.yesterdayMaxTemp, data.daily[0].maxTemp, diffL);
-
-    if (diffL >= 0.5) { // Threshold 0.5
-      lv_label_set_text(arrow_l, LV_SYMBOL_UP);
-      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0xFF5555), 0);
-    } else if (diffL <= -0.5) {
-      lv_label_set_text(arrow_l, LV_SYMBOL_DOWN);
-      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x5555FF), 0);
-    } else {
-      lv_label_set_text(arrow_l, "-"); // Stable
-      lv_obj_set_style_text_color(arrow_l, lv_color_hex(0x888888), 0);
-    }
-
     // Temp
     lv_obj_t *temp_lbl = lv_label_create(temp_row);
     snprintf(buf, sizeof(buf), "%.1f°C", data.currentTemp);
     lv_label_set_text(temp_lbl, buf);
-    lv_obj_set_style_text_font(temp_lbl, GuiController::safe_font_32,
+    lv_obj_set_style_text_font(temp_lbl, &lv_font_montserrat_32,
                                0); // Upgrade 24->32
     lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
 
-    // Right Arrow
+    // Right Arrow - Floating to keep Temp centered
     lv_obj_t *arrow_r = lv_label_create(temp_row);
+    lv_obj_add_flag(arrow_r, LV_OBJ_FLAG_FLOATING);
+    lv_obj_align(arrow_r, LV_ALIGN_RIGHT_MID, -10,
+                 0); // Add 10px padding from right edge
     float diffR = data.daily[1].maxTemp - data.daily[0].maxTemp;
     if (diffR >= 1.0) {
       lv_label_set_text(arrow_r, LV_SYMBOL_UP);
@@ -282,18 +268,41 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     snprintf(buf, sizeof(buf), "H:%.0f° L:%.0f°", data.daily[0].maxTemp,
              data.daily[0].minTemp);
     lv_label_set_text(hl_lbl, buf); // Restored!
-    lv_obj_set_style_text_font(hl_lbl, GuiController::safe_font_16,
+    lv_obj_set_style_text_font(hl_lbl, &lv_font_montserrat_16,
                                0); // Upgrade H/L 14->16
     lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_pad_top(hl_lbl, 0, 0);
 
     // Desc
-    lv_obj_t *desc_lbl = lv_label_create(glass_card);
+    // Desc Container (Desc + Rain%)
+    lv_obj_t *desc_row = lv_obj_create(glass_card);
+    lv_obj_set_size(desc_row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(desc_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(desc_row, 0, 0);
+    lv_obj_set_flex_flow(desc_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(desc_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(desc_row, 0, 0);
+    lv_obj_set_style_pad_top(desc_row, 2, 0);
+    lv_obj_clear_flag(desc_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Weather Description
+    lv_obj_t *desc_lbl = lv_label_create(desc_row);
     lv_label_set_text(desc_lbl, getWeatherDesc(data.currentWeatherCode));
     lv_obj_set_style_text_color(desc_lbl, lv_color_hex(0xFFD700), 0);
-    lv_obj_set_style_text_font(desc_lbl, GuiController::safe_font_16,
-                               0); // Upgrade Desc -> 16
-    lv_obj_set_style_pad_top(desc_lbl, 2, 0);
+    lv_obj_set_style_text_font(desc_lbl, &lv_font_montserrat_16, 0);
+
+    // Rain % (Appended)
+    if (data.currentRainProb > 0.0) {
+      lv_obj_t *rain_appended = lv_label_create(desc_row);
+      char rBuf[16];
+      snprintf(rBuf, sizeof(rBuf), " %.0f%%",
+               data.currentRainProb * 100.0); // Space prefix
+      lv_label_set_text(rain_appended, rBuf);
+      lv_obj_set_style_text_color(rain_appended, lv_color_hex(0x00BFFF),
+                                  0); // Blue
+      lv_obj_set_style_text_font(rain_appended, &lv_font_montserrat_16, 0);
+    }
 
     // Pills
     lv_obj_t *details_cont = lv_obj_create(bg_grad);
@@ -329,14 +338,14 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *v = lv_label_create(pill);
       lv_label_set_text(v, value);
       lv_obj_set_style_text_color(v, lv_color_hex(color), 0);
-      lv_obj_set_style_text_font(v, GuiController::safe_font_16,
+      lv_obj_set_style_text_font(v, &lv_font_montserrat_16,
                                  0); // Upgrade 14->16
 
       lv_obj_t *l = lv_label_create(pill);
       lv_label_set_text(l, label);
       lv_obj_set_style_text_color(l, lv_color_hex(0xDDDDDD),
                                   0); // Brighter Grey
-      lv_obj_set_style_text_font(l, GuiController::safe_font_16,
+      lv_obj_set_style_text_font(l, &lv_font_montserrat_16,
                                  0); // Upgrade 14->16
     };
 
@@ -352,8 +361,18 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     snprintf(buf, sizeof(buf), "%.0f hPa", data.currentPressure);
     add_pill("Pressure", buf, 0xFFFFFF);
 
-    snprintf(buf, sizeof(buf), "AQI: %d", data.currentAQI);
-    add_pill("Quality", buf, data.currentAQI > 50 ? 0xFFA500 : 0x00FF00);
+    char aqiBuf[32];
+    snprintf(aqiBuf, sizeof(aqiBuf), "AQI: %d", data.currentAQI);
+    uint32_t aqiColor = 0x00FF00; // Good (1)
+    if (data.currentAQI == 2)
+      aqiColor = 0xADFF2F; // Fair (GreenYellow)
+    else if (data.currentAQI == 3)
+      aqiColor = 0xFFFF00; // Moderate (Yellow)
+    else if (data.currentAQI == 4)
+      aqiColor = 0xFFA500; // Poor (Orange)
+    else if (data.currentAQI >= 5)
+      aqiColor = 0xFF4500; // Very Poor (OrangeRed)
+    add_pill("Quality", aqiBuf, aqiColor);
 
   } else if (forecastMode == 1 || forecastMode == 2) {
     // === LIST VIEWS ===
@@ -363,7 +382,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     String headerText = GuiController::sanitize(data.cityName) +
                         (isHourly ? " - Hourly" : " - 7 Days");
     lv_label_set_text(header, headerText.c_str());
-    lv_obj_set_style_text_font(header, GuiController::safe_font_16, 0);
+    lv_obj_set_style_text_font(header, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(header, lv_color_hex(0xFFFFFF), 0);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 10);
 
@@ -426,6 +445,23 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                         false);
       if (lv_obj_get_child(icon_box, 0))
         lv_img_set_zoom(lv_obj_get_child(icon_box, 0), 160);
+
+      // Rain Prob (List)
+      float pop = isHourly ? data.hourly[i].pop : data.daily[i].pop;
+      lv_obj_t *rain_lbl = lv_label_create(row);
+      lv_obj_set_width(rain_lbl, 40);
+      lv_obj_set_style_text_align(rain_lbl, LV_TEXT_ALIGN_CENTER, 0);
+
+      if (pop >= 0.1) { // Show if > 10%
+        char rainBuf[16];
+        snprintf(rainBuf, sizeof(rainBuf), "%.0f%%", pop * 100.0);
+        lv_label_set_text(rain_lbl, rainBuf);
+        lv_obj_set_style_text_color(rain_lbl, lv_color_hex(0x00BFFF), 0);
+        lv_obj_set_style_text_font(rain_lbl, &lv_font_montserrat_14,
+                                   0); // Small font
+      } else {
+        lv_label_set_text(rain_lbl, "");
+      }
 
       // Trend
       if (!isHourly) {

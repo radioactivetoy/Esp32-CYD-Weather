@@ -144,7 +144,8 @@ void DataManager::networkTask(void *parameter) {
   String pResolved;
   bool primarySuccess = false;
 
-  if (WeatherService::lookupCoordinates(cities[0], pLat, pLon, pResolved)) {
+  if (WeatherService::lookupCoordinates(cities[0], pLat, pLon, pResolved,
+                                        NetworkManager::getOwmApiKey())) {
     String owmKey = NetworkManager::getOwmApiKey();
     if (WeatherService::updateWeather(tempWeather, pLat, pLon, owmKey)) {
       tempWeather.cityName = (pResolved.length() > 0) ? pResolved : cities[0];
@@ -202,9 +203,9 @@ void DataManager::networkTask(void *parameter) {
       WeatherData temp;
       float lat, lon;
       String res;
+      String owmKey = NetworkManager::getOwmApiKey();
       if (WeatherService::lookupCoordinates(cityCaches[0].cityName, lat, lon,
-                                            res)) {
-        String owmKey = NetworkManager::getOwmApiKey();
+                                            res, owmKey)) {
         if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
           temp.cityName = (res.length() > 0) ? res : cityCaches[0].cityName;
           cityCaches[0].data = temp;
@@ -251,9 +252,9 @@ void DataManager::networkTask(void *parameter) {
         WeatherData temp;
         float lat, lon;
         String res;
+        String owmKey = NetworkManager::getOwmApiKey();
         if (WeatherService::lookupCoordinates(
-                cityCaches[targetCityIndex].cityName, lat, lon, res)) {
-          String owmKey = NetworkManager::getOwmApiKey();
+                cityCaches[targetCityIndex].cityName, lat, lon, res, owmKey)) {
           if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
             temp.cityName =
                 (res.length() > 0) ? res : cityCaches[targetCityIndex].cityName;

@@ -67,22 +67,6 @@ static int forecastMode = 0; // 0: Current, 1: Hourly, 2: Daily, 3: Chart
 // Custom Font
 LV_FONT_DECLARE(font_intl_16);
 
-// Standard Fonts
-LV_FONT_DECLARE(lv_font_montserrat_14);
-LV_FONT_DECLARE(lv_font_montserrat_16);
-LV_FONT_DECLARE(lv_font_montserrat_20);
-LV_FONT_DECLARE(lv_font_montserrat_24);
-LV_FONT_DECLARE(lv_font_montserrat_28);
-LV_FONT_DECLARE(lv_font_montserrat_32);
-
-// Safe Font Instances - pointing directly to LVGL const fonts
-const lv_font_t *GuiController::safe_font_14 = &lv_font_montserrat_14;
-const lv_font_t *GuiController::safe_font_16 = &lv_font_montserrat_16;
-const lv_font_t *GuiController::safe_font_20 = &lv_font_montserrat_20;
-const lv_font_t *GuiController::safe_font_24 = &lv_font_montserrat_24;
-const lv_font_t *GuiController::safe_font_28 = &lv_font_montserrat_28;
-const lv_font_t *GuiController::safe_font_32 = &lv_font_montserrat_32;
-
 void GuiController::init() {
   lv_init();
   tft.begin();
