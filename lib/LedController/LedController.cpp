@@ -69,18 +69,18 @@ void LedController::update(const WeatherData &data) {
   for (int i = 1; i <= 2; i++) {
     if (isRain(data.hourly[i].weatherCode)) {
       Serial.printf("LED: Condition ORANGE (Rain in %dh)\n", i);
-      setRGB(255, 165, 0); // ORANGE
+      setRGB(255, 60, 0); // ORANGE (Reduced Green for better contrast vs Red)
       return;
     }
   }
 
-  // 3. Yellow: Rain expected later
+  // 3. Blue: Rain expected later
   for (int i = 3; i < 15; i++) {
     if (i >= 24)
       break;
     if (isRain(data.hourly[i].weatherCode)) {
-      Serial.println("LED: Condition YELLOW (Rain later)");
-      setRGB(255, 255, 0); // YELLOW
+      Serial.println("LED: Condition BLUE (Rain later)");
+      setRGB(0, 0, 255); // BLUE (Replaces Yellow for better visibility)
       return;
     }
   }
