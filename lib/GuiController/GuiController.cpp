@@ -277,7 +277,7 @@ void GuiController::handleScreenClick(lv_event_t *e) {
   }
 
   if (currentApp == APP_WEATHER) {
-    forecastMode = (forecastMode + 1) % 4;
+    forecastMode = (forecastMode + 1) % 3;
     showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_FADE_ON);
   } else if (currentApp == APP_BUS) {
     // Switch Station on Tap
