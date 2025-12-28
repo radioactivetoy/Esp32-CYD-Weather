@@ -276,6 +276,13 @@ void GuiController::handleScreenClick(lv_event_t *e) {
     return;
   }
 
+  // Debounce to prevent rapid clicks causing OOM
+  static uint32_t lastClickTime = 0;
+  if (millis() - lastClickTime < 350) {
+    return;
+  }
+  lastClickTime = millis();
+
   if (currentApp == APP_WEATHER) {
     forecastMode = (forecastMode + 1) % 3;
     showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_FADE_ON);
