@@ -17,7 +17,16 @@ volatile bool DataManager::stockDataUpdated = false;
 
 volatile bool DataManager::manualBusTrigger = false;
 volatile bool DataManager::manualWeatherTrigger = false;
-volatile bool DataManager::manualStockTrigger = true; // Force initial
+volatile bool DataManager::manualStockTrigger = true;
+volatile bool DataManager::isUpdatingWeather = false;
+volatile bool DataManager::isUpdatingBus = false;
+volatile bool DataManager::isUpdatingStock = false;
+volatile uint32_t DataManager::stockLastUpdateTime = 0;
+
+bool DataManager::isWeatherUpdating() { return isUpdatingWeather; }
+bool DataManager::isBusUpdating() { return isUpdatingBus; }
+bool DataManager::isStockUpdating() { return isUpdatingStock; }
+uint32_t DataManager::getStockLastUpdate() { return stockLastUpdateTime; }
 
 std::vector<CityWeatherCache> DataManager::cityCaches;
 std::vector<BusStopCache> DataManager::busCaches;
@@ -151,10 +160,11 @@ void DataManager::networkTask(void *parameter) {
       String owmKey = NetworkManager::getOwmApiKey();
       if (WeatherService::updateWeather(tempWeather, pLat, pLon, owmKey)) {
         tempWeather.cityName = (pResolved.length() > 0) ? pResolved : cities[0];
+        tempWeather.lastUpdate = millis(); // Set Timestamp
 
         cityCaches[0].data = tempWeather;
         cityCaches[0].hasData = true;
-        cityCaches[0].lastUpdate = millis();
+        cityCaches[0].lastUpdate = tempWeather.lastUpdate;
 
         // Push to Global
         if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
@@ -190,8 +200,9 @@ void DataManager::networkTask(void *parameter) {
     if (BusService::updateBusTimes(tempBus, stopId,
                                    NetworkManager::getAppId().c_str(),
                                    NetworkManager::getAppKey().c_str())) {
+      tempBus.lastUpdate = millis();
       busCaches[0].data = tempBus;
-      busCaches[0].lastUpdate = millis();
+      busCaches[0].lastUpdate = tempBus.lastUpdate;
 
       if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
         busData = tempBus;
@@ -265,9 +276,14 @@ void DataManager::networkTask(void *parameter) {
 
         if (WeatherService::lookupCoordinates(cityCaches[cityToUpdate].cityName,
                                               lat, lon, res, owmKey)) {
-          if (WeatherService::updateWeather(temp, lat, lon, owmKey)) {
+          isUpdatingWeather = true;
+          bool success = WeatherService::updateWeather(temp, lat, lon, owmKey);
+          isUpdatingWeather = false;
+
+          if (success) {
             temp.cityName =
                 (res.length() > 0) ? res : cityCaches[cityToUpdate].cityName;
+            temp.lastUpdate = now; // Set Timestamp
 
             cityCaches[cityToUpdate].data = temp;
             cityCaches[cityToUpdate].lastUpdate = now;
@@ -282,10 +298,19 @@ void DataManager::networkTask(void *parameter) {
               xSemaphoreGive(dataMutex);
             }
 
-            // LED Logic: Only update LED for the First City (Index 0)
             if (cityToUpdate == 0) {
               LedController::update(temp);
             }
+          }
+          // Always trigger update to clear "Updating" status in UI
+          if (cityToUpdate == targetCityIndex) {
+            xSemaphoreTake(dataMutex, portMAX_DELAY);
+            if (!success) {
+              // If failed, we still want to notify UI to redraw (to clear
+              // Yellow dot) We don't update weatherData, just the flag.
+            }
+            weatherDataUpdated = true;
+            xSemaphoreGive(dataMutex);
           }
         }
       } // End if (safeToRequest)
@@ -351,21 +376,24 @@ void DataManager::networkTask(void *parameter) {
         lastNetworkRequestMs = now;
 
         BusData tempBus;
-        if (BusService::updateBusTimes(tempBus, stopId,
-                                       NetworkManager::getAppId().c_str(),
-                                       NetworkManager::getAppKey().c_str())) {
+        isUpdatingBus = true;
+        bool success = BusService::updateBusTimes(
+            tempBus, stopId, NetworkManager::getAppId().c_str(),
+            NetworkManager::getAppKey().c_str());
+        isUpdatingBus = false;
 
+        if (success) {
+          tempBus.lastUpdate = now;
           busCaches[busToUpdate].data = tempBus;
           busCaches[busToUpdate].lastUpdate = now;
-
-          // Only push to global if it matches the ACTIVE target
-          if (busToUpdate == targetBusIndex) {
-            xSemaphoreTake(dataMutex, portMAX_DELAY);
-            busData = tempBus;
-            busDataUpdated = true;
-            xSemaphoreGive(dataMutex);
-          }
         }
+      }
+
+      // Always trigger update to clear "Updating" status
+      if (busToUpdate == targetBusIndex) {
+        xSemaphoreTake(dataMutex, portMAX_DELAY);
+        busDataUpdated = true;
+        xSemaphoreGive(dataMutex);
       }
     }
 
@@ -378,10 +406,19 @@ void DataManager::networkTask(void *parameter) {
         Serial.println("NETWORK: Updating Stocks...");
         lastNetworkRequestMs = now;
 
+        isUpdatingStock = true;
         std::vector<StockItem> items = StockService::getQuotes(syms);
+        isUpdatingStock = false;
+
         if (!items.empty()) {
           xSemaphoreTake(dataMutex, portMAX_DELAY);
           stockData = items;
+          stockLastUpdateTime = now;
+          stockDataUpdated = true;
+          xSemaphoreGive(dataMutex);
+        } else {
+          // Failed or empty - still update flag to clear status
+          xSemaphoreTake(dataMutex, portMAX_DELAY);
           stockDataUpdated = true;
           xSemaphoreGive(dataMutex);
         }

@@ -33,6 +33,7 @@ struct WeatherData {
   int windDirection;
   float currentRainProb; // New
   bool isNight;          // New: For icon selection
+  uint32_t lastUpdate;   // Timestamp of last successful update
   DailyForecast daily[7];
   HourlyForecast hourly[24];
 };

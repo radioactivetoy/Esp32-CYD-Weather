@@ -6,11 +6,9 @@
 #include <freertos/semphr.h>
 #include <vector>
 
-
 #include "BusService.h"
 #include "StockService.h"
 #include "WeatherService.h"
-
 
 // Cache Structs (Moved from main.cpp)
 struct CityWeatherCache {
@@ -47,6 +45,12 @@ public:
   static void triggerWeatherUpdate();
   static void triggerStockUpdate();
 
+  // Status
+  static bool isWeatherUpdating();
+  static bool isBusUpdating();
+  static bool isStockUpdating();
+  static uint32_t getStockLastUpdate();
+
 private:
   static void networkTask(void *parameter); // The background loop
 
@@ -61,8 +65,11 @@ private:
   static volatile bool weatherDataUpdated;
   static volatile bool busDataUpdated;
   static volatile bool stockDataUpdated;
+  static volatile bool isUpdatingWeather;
+  static volatile bool isUpdatingBus;
+  static volatile bool isUpdatingStock;
+  static volatile uint32_t stockLastUpdateTime;
 
-  // Trigger Flags
   static volatile bool manualBusTrigger;
   static volatile bool manualWeatherTrigger;
   static volatile bool manualStockTrigger;

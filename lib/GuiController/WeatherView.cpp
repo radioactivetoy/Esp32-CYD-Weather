@@ -1,4 +1,5 @@
 #include "WeatherView.h"
+#include "DataManager.h"
 #include "GuiController.h"
 #include <cstdio>
 
@@ -202,6 +203,23 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20, 0);
     lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
     GuiController::setActiveTimeLabel(time_lbl);
+
+    // Status Dot
+    lv_obj_t *dot = lv_obj_create(header_row);
+    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(dot, 0, 0);
+    lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+
+    uint32_t dotColor = 0x00AA00; // Dark Green (Fresh)
+    if (DataManager::isWeatherUpdating()) {
+      dotColor = 0xFFFF00; // Yellow (Refreshing)
+    } else if (data.lastUpdate == 0 ||
+               (millis() - data.lastUpdate > 900000)) { // 15 mins or Never
+      dotColor = 0xFF0000;                              // Red (Stale)
+    }
+    lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
   }
 
   if (forecastMode == 0) {

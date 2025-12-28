@@ -1,4 +1,5 @@
 #include "BusView.h"
+#include "DataManager.h"
 #include "GuiController.h"
 #include <cstdio>
 
@@ -46,16 +47,11 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_t *header = lv_obj_create(new_scr);
   lv_obj_set_size(header, LV_PCT(100), 40);
   lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
-  lv_obj_set_style_bg_color(header, lv_color_hex(0xCC0000), 0);
+  lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, 0); // Transparent like others
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(header, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
-
-  lv_obj_t *icon = lv_img_create(header);
-  lv_img_set_src(icon, &bus_icon);
-  lv_img_set_zoom(icon, 128);
-  lv_obj_align(icon, LV_ALIGN_LEFT_MID, 5, 0);
 
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {
@@ -63,10 +59,12 @@ void BusView::show(const BusData &data, int anim) {
   } else {
     lv_label_set_text_fmt(title, "Stop: %s", data.stopCode.c_str());
   }
+
   lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
-  lv_obj_set_width(title, 190);
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_align(title, LV_ALIGN_LEFT_MID, 10, 0);
+  lv_obj_set_width(title, 160);
+  lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0); // Cyan
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);  // Font 20
+  lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0); // Left Aligned (No Icon)
 
   // Time
   struct tm timeinfo;
@@ -75,10 +73,27 @@ void BusView::show(const BusData &data, int anim) {
     strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
     lv_obj_t *time_lb = lv_label_create(header);
     lv_label_set_text(time_lb, timeStr);
-    lv_obj_set_style_text_color(time_lb, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0); // Grey
     lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20, 0);
-    lv_obj_align(time_lb, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0); // Top aligned
     GuiController::setActiveTimeLabel(time_lb);
+
+    // Status Dot
+    lv_obj_t *dot = lv_obj_create(header);
+    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(dot, 0, 0);
+    lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+
+    uint32_t dotColor = 0x00AA00; // Dark Green
+    if (DataManager::isBusUpdating()) {
+      dotColor = 0xFFFF00; // Yellow
+    } else if (data.lastUpdate == 0 ||
+               (millis() - data.lastUpdate > 60000)) { // 60s Stale
+      dotColor = 0xFF0000;                             // Red
+    }
+    lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
   }
 
   // List

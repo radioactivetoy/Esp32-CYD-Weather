@@ -1,4 +1,5 @@
 #include "StockView.h"
+#include "DataManager.h"
 #include "GuiController.h"
 #include "NetworkManager.h"
 #include <cstdio>
@@ -52,6 +53,24 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
                                0); // Upgrade 14->20
     lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
     GuiController::setActiveTimeLabel(time_lb);
+
+    // Status Dot
+    lv_obj_t *dot = lv_obj_create(header);
+    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(dot, 0, 0);
+    lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+
+    uint32_t dotColor = 0x00AA00; // Dark Green
+    uint32_t lastUpdate = DataManager::getStockLastUpdate();
+    if (DataManager::isStockUpdating()) {
+      dotColor = 0xFFFF00; // Yellow
+    } else if (lastUpdate == 0 ||
+               (millis() - lastUpdate > 300000)) { // 5m Stale
+      dotColor = 0xFF0000;                         // Red
+    }
+    lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
   }
 
   // List
