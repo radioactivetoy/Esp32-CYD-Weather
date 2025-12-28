@@ -15,18 +15,42 @@ volatile bool DataManager::weatherDataUpdated = false;
 volatile bool DataManager::busDataUpdated = false;
 volatile bool DataManager::stockDataUpdated = false;
 
-volatile bool DataManager::manualBusTrigger = false;
-volatile bool DataManager::manualWeatherTrigger = false;
-volatile bool DataManager::manualStockTrigger = true;
-volatile bool DataManager::isUpdatingWeather = false;
-volatile bool DataManager::isUpdatingBus = false;
+volatile int DataManager::currentUpdatingCityIndex = -1;
+volatile int DataManager::currentUpdatingBusIndex = -1;
 volatile bool DataManager::isUpdatingStock = false;
 volatile uint32_t DataManager::stockLastUpdateTime = 0;
 
-bool DataManager::isWeatherUpdating() { return isUpdatingWeather; }
-bool DataManager::isBusUpdating() { return isUpdatingBus; }
+volatile bool DataManager::weatherStatusChanged = false;
+volatile bool DataManager::busStatusChanged = false;
+
+volatile bool DataManager::manualBusTrigger = false;
+volatile bool DataManager::manualWeatherTrigger = false;
+volatile bool DataManager::manualStockTrigger = true;
+
+bool DataManager::isWeatherUpdating(int cityIndex) {
+  return currentUpdatingCityIndex == cityIndex;
+}
+bool DataManager::isBusUpdating(int busIndex) {
+  return currentUpdatingBusIndex == busIndex;
+}
 bool DataManager::isStockUpdating() { return isUpdatingStock; }
 uint32_t DataManager::getStockLastUpdate() { return stockLastUpdateTime; }
+
+bool DataManager::getWeatherStatusChanged() {
+  if (weatherStatusChanged) {
+    weatherStatusChanged = false;
+    return true;
+  }
+  return false;
+}
+
+bool DataManager::getBusStatusChanged() {
+  if (busStatusChanged) {
+    busStatusChanged = false;
+    return true;
+  }
+  return false;
+}
 
 std::vector<CityWeatherCache> DataManager::cityCaches;
 std::vector<BusStopCache> DataManager::busCaches;
@@ -276,9 +300,17 @@ void DataManager::networkTask(void *parameter) {
 
         if (WeatherService::lookupCoordinates(cityCaches[cityToUpdate].cityName,
                                               lat, lon, res, owmKey)) {
-          isUpdatingWeather = true;
+          currentUpdatingCityIndex = cityToUpdate; // Start Update
+          weatherStatusChanged = true;             // Signal UI
+          vTaskDelay(50);                          // Ensure UI paints Yellow
+
           bool success = WeatherService::updateWeather(temp, lat, lon, owmKey);
-          isUpdatingWeather = false;
+          if (success)
+            Serial.println("NETWORK: Weather Update Success");
+          else
+            Serial.println("NETWORK: Weather Update Failed");
+
+          currentUpdatingCityIndex = -1; // End Update
 
           if (success) {
             temp.cityName =
@@ -376,16 +408,32 @@ void DataManager::networkTask(void *parameter) {
         lastNetworkRequestMs = now;
 
         BusData tempBus;
-        isUpdatingBus = true;
+        currentUpdatingBusIndex = busToUpdate; // Start Update
+        busStatusChanged = true;               // Signal UI
+        vTaskDelay(50);                        // Ensure UI paints Yellow
+
         bool success = BusService::updateBusTimes(
             tempBus, stopId, NetworkManager::getAppId().c_str(),
             NetworkManager::getAppKey().c_str());
-        isUpdatingBus = false;
+
+        if (success)
+          Serial.println("NETWORK: Bus Update Success");
+        else
+          Serial.println("NETWORK: Bus Update Failed");
+
+        currentUpdatingBusIndex = -1; // End Update
 
         if (success) {
           tempBus.lastUpdate = now;
           busCaches[busToUpdate].data = tempBus;
           busCaches[busToUpdate].lastUpdate = now;
+
+          // Update global busData if this is the active bus
+          if (busToUpdate == targetBusIndex) {
+            xSemaphoreTake(dataMutex, portMAX_DELAY);
+            busData = tempBus;
+            xSemaphoreGive(dataMutex);
+          }
         }
       }
 

@@ -56,10 +56,10 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
 
     // Status Dot
     lv_obj_t *dot = lv_obj_create(header);
-    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_size(dot, 10, 8); // Wider
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(dot, 0, 0);
-    lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+    lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
 
     uint32_t dotColor = 0x00AA00; // Dark Green

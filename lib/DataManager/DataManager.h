@@ -46,10 +46,15 @@ public:
   static void triggerStockUpdate();
 
   // Status
-  static bool isWeatherUpdating();
-  static bool isBusUpdating();
+  // Status
+  static bool isWeatherUpdating(int cityIndex);
+  static bool isBusUpdating(int busIndex);
   static bool isStockUpdating();
   static uint32_t getStockLastUpdate();
+
+  // Status Change Signals (True when "Is Updating" state changes)
+  static bool getWeatherStatusChanged();
+  static bool getBusStatusChanged();
 
 private:
   static void networkTask(void *parameter); // The background loop
@@ -65,10 +70,15 @@ private:
   static volatile bool weatherDataUpdated;
   static volatile bool busDataUpdated;
   static volatile bool stockDataUpdated;
-  static volatile bool isUpdatingWeather;
-  static volatile bool isUpdatingBus;
+  // static volatile bool isUpdatingWeather; // Replaced by index check
+  // static volatile bool isUpdatingBus;     // Replaced by index check
+  static volatile int currentUpdatingCityIndex;
+  static volatile int currentUpdatingBusIndex;
   static volatile bool isUpdatingStock;
   static volatile uint32_t stockLastUpdateTime;
+
+  static volatile bool weatherStatusChanged;
+  static volatile bool busStatusChanged;
 
   static volatile bool manualBusTrigger;
   static volatile bool manualWeatherTrigger;

@@ -8,7 +8,6 @@
 #include <TFT_eSPI.h>
 #include <lvgl.h>
 
-
 // --- TOUCH DRIVER (CST816S) ---
 TouchDrv touch;
 
@@ -118,6 +117,27 @@ void loop() {
     GuiController::updateStockCache(sd);
     if (GuiController::isStockScreenActive()) {
       GuiController::showStockScreen(sd, 0);
+    }
+  }
+
+  // 4. Status Change Updates (Repaint for Yellow Dot)
+  if (DataManager::getBusStatusChanged() &&
+      GuiController::isBusScreenActive()) {
+    // Refresh with current cache (don't consume new data flag if not set)
+    GuiController::showBusScreen(DataManager::getCurrentBusData(), 0);
+  }
+  if (DataManager::getWeatherStatusChanged()) {
+    // We stick to the currently displayed city index in GuiController logic
+    // But WeatherView needs to know which one. GuiController handles the
+    // mapping. Simplifying: Just refresh if active. Note: Checking specific
+    // screen activation is complex for Weather (Forecast vs Current) For now,
+    // just call update logic? No, update() doesn't redraw. Let's leave Weather
+    // for now if user didn't explicitly complain, but good to add. Actually,
+    // `showWeatherScreen` takes WeatherData. We need to know IF weather screen
+    // is active. GuiController doesn't expose `isWeatherScreenActive` clearly
+    // (it has AppMode).
+    if (GuiController::currentApp == GuiController::APP_WEATHER) {
+      GuiController::showWeatherScreen(DataManager::getCurrentWeatherData(), 0);
     }
   }
 

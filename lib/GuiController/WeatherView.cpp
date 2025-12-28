@@ -205,15 +205,16 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     GuiController::setActiveTimeLabel(time_lbl);
 
     // Status Dot
+    // Status Dot
     lv_obj_t *dot = lv_obj_create(header_row);
-    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_size(dot, 10, 8); // Wider
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(dot, 0, 0);
-    lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+    lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
 
     uint32_t dotColor = 0x00AA00; // Dark Green (Fresh)
-    if (DataManager::isWeatherUpdating()) {
+    if (DataManager::isWeatherUpdating(GuiController::getCityIndex())) {
       dotColor = 0xFFFF00; // Yellow (Refreshing)
     } else if (data.lastUpdate == 0 ||
                (millis() - data.lastUpdate > 900000)) { // 15 mins or Never
