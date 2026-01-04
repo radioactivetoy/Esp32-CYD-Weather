@@ -201,12 +201,11 @@ void BusView::show(const BusData &data, int anim) {
       idx++;
     }
   }
-} // Close else block
 
-// Manual switch to bypass Animation Engine crash
-lv_obj_t *old_scr = lv_scr_act();
-lv_scr_load(new_scr);
-if (old_scr) {
-  lv_obj_del(old_scr);
-}
+  // Manual switch to bypass Animation Engine crash
+  lv_obj_t *old_scr = lv_scr_act();
+  lv_scr_load(new_scr);
+  if (old_scr) {
+    lv_obj_del(old_scr);
+  }
 }
