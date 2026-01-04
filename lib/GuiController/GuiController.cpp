@@ -56,6 +56,7 @@ void GuiController::updateStockCache(const std::vector<StockItem> &data) {
 // Queue & Cache
 String GuiController::pendingMsg = "";
 bool GuiController::needsUpdate = false;
+SemaphoreHandle_t GuiController::guiMutex = NULL;
 WeatherData GuiController::cachedWeather;
 BusData GuiController::cachedBus;
 std::vector<StockItem> GuiController::cachedStock;
@@ -68,6 +69,7 @@ static int forecastMode = 0; // 0: Current, 1: Hourly, 2: Daily, 3: Chart
 LV_FONT_DECLARE(font_intl_16);
 
 void GuiController::init() {
+  guiMutex = xSemaphoreCreateMutex();
   lv_init();
   tft.begin();
   tft.setRotation(0);
@@ -84,17 +86,25 @@ void GuiController::init() {
 }
 
 void GuiController::showLoadingScreen(const char *msg) {
-  if (msg)
-    pendingMsg = String(msg);
-  else
-    pendingMsg = "Loading...";
-  needsUpdate = true;
+  if (xSemaphoreTake(guiMutex, portMAX_DELAY) == pdTRUE) {
+    if (msg)
+      pendingMsg = String(msg);
+    else
+      pendingMsg = "Loading...";
+    needsUpdate = true;
+    xSemaphoreGive(guiMutex);
+  }
 }
 
 void GuiController::update() {
   if (needsUpdate) {
-    needsUpdate = false;
-    drawLoadingScreen(pendingMsg.c_str());
+    if (xSemaphoreTake(guiMutex, 5) == pdTRUE) {
+      if (needsUpdate) { // Double check inside lock
+        needsUpdate = false;
+        drawLoadingScreen(pendingMsg.c_str());
+      }
+      xSemaphoreGive(guiMutex);
+    }
   }
   lv_timer_handler();
 }
@@ -178,12 +188,15 @@ const char *GuiController::sanitize(const String &text) {
 // --- DELEGATED VIEW METHODS ---
 
 void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
+  activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedWeather)
     cachedWeather = data;
   WeatherView::show(data, anim, forecastMode);
+  // activeTimeLabel will be updated by WeatherView::show if successful
 }
 
 void GuiController::showBusScreen(const BusData &data, int anim) {
+  activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedBus)
     cachedBus = data;
   BusView::show(data, anim);
@@ -191,6 +204,7 @@ void GuiController::showBusScreen(const BusData &data, int anim) {
 
 void GuiController::showStockScreen(const std::vector<StockItem> &data,
                                     int anim) {
+  activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedStock)
     cachedStock = data;
   StockView::show(data, anim);
@@ -205,6 +219,7 @@ void GuiController::setActiveTimeLabel(lv_obj_t *label) {
 void GuiController::updateTime() {
   if (activeTimeLabel == NULL)
     return;
+  // Safety Check: Verify object is still valid in LVGL
   if (!lv_obj_is_valid(activeTimeLabel)) {
     activeTimeLabel = NULL;
     return;

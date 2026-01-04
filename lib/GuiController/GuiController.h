@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Arduino.h>
+
 #include "BusService.h"
 #include "StockService.h"
 #include "WeatherService.h"
@@ -68,4 +70,6 @@ private:
   static WeatherData cachedWeather;
   static BusData cachedBus;
   static std::vector<StockItem> cachedStock;
+
+  static SemaphoreHandle_t guiMutex; // Thread Safety for Loading Msg & State
 };
