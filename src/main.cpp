@@ -104,10 +104,12 @@ void loop() {
 
   // 2. Bus Update
   BusData bd;
+  bool busUpdated = false;
   if (DataManager::getBusData(bd)) {
     GuiController::updateBusCache(bd);
     if (GuiController::isBusScreenActive()) {
       GuiController::showBusScreen(bd, 0);
+      busUpdated = true;
     }
   }
 
@@ -121,7 +123,7 @@ void loop() {
   }
 
   // 4. Status Change Updates (Repaint for Yellow Dot)
-  if (DataManager::getBusStatusChanged() &&
+  if (!busUpdated && DataManager::getBusStatusChanged() &&
       GuiController::isBusScreenActive()) {
     // Refresh with current cache (don't consume new data flag if not set)
     GuiController::showBusScreen(DataManager::getCurrentBusData(), 0);

@@ -184,9 +184,9 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_set_style_text_font(city_lbl, &lv_font_montserrat_20, 0);
   lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
-  String titleText =
-      String(data.cityName.length() > 0 ? GuiController::sanitize(data.cityName)
-                                        : "Unknown");
+  String titleText = String(data.cityName.length() > 0
+                                ? GuiController::sanitize(data.cityName).c_str()
+                                : "Unknown");
   if (forecastMode == 1)
     titleText += " - Hourly";
   else if (forecastMode == 2)

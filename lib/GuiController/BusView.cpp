@@ -31,8 +31,10 @@ lv_color_t BusView::getBusLineColor(const String &line, lv_color_t &textColor) {
 
 void BusView::show(const BusData &data, int anim) {
   GuiController::currentApp = GuiController::APP_BUS;
+  Serial.println("BusView: Start Show");
 
   lv_obj_t *new_scr = lv_obj_create(NULL);
+  Serial.println("BusView: Screen Created");
   lv_obj_clean(new_scr);
 
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
@@ -55,7 +57,7 @@ void BusView::show(const BusData &data, int anim) {
 
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {
-    lv_label_set_text(title, GuiController::sanitize(data.stopName));
+    lv_label_set_text(title, GuiController::sanitize(data.stopName).c_str());
   } else {
     lv_label_set_text_fmt(title, "Stop: %s", data.stopCode.c_str());
   }
@@ -63,7 +65,9 @@ void BusView::show(const BusData &data, int anim) {
   lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
   lv_obj_set_width(title, 160);
   lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0); // Cyan
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);  // Font 20
+  // Ensure font is valid or available
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0); // Font 20
+  Serial.println("BusView: Title Set");
   lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0); // Left Aligned (No Icon)
 
   // Time
@@ -95,10 +99,14 @@ void BusView::show(const BusData &data, int anim) {
       dotColor = 0xFF0000;                             // Red
     }
     lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
+    Serial.println("BusView: Time & Dot Created");
+  } else {
+    Serial.println("BusView: Time Skipped (No NTP)");
   }
 
   // List
   lv_obj_t *list = lv_obj_create(new_scr);
+  Serial.println("BusView: List Created");
   lv_obj_set_size(list, LV_PCT(100), 280);
   lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
@@ -113,6 +121,7 @@ void BusView::show(const BusData &data, int anim) {
     lv_obj_t *lbl = lv_label_create(list);
     lv_label_set_text(lbl, "No buses found or API Error.");
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
+    Serial.println("BusView: Empty List");
   } else {
     int idx = 0;
     int limit = 6;
@@ -121,6 +130,8 @@ void BusView::show(const BusData &data, int anim) {
         break;
 
       lv_obj_t *row = lv_obj_create(list);
+      if (!row)
+        break;
       lv_obj_set_size(row, LV_PCT(100), 44);
       lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
       lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
@@ -155,7 +166,7 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_style_text_font(lineLbl, &lv_font_montserrat_14, 0);
 
       lv_obj_t *dest = lv_label_create(row);
-      lv_label_set_text(dest, GuiController::sanitize(arr.destination));
+      lv_label_set_text(dest, GuiController::sanitize(arr.destination).c_str());
       lv_obj_set_flex_grow(dest, 1);
       lv_label_set_long_mode(dest, LV_LABEL_LONG_SCROLL_CIRCULAR);
       lv_obj_set_style_text_color(dest, lv_color_hex(0xDDDDDD), 0);
@@ -179,9 +190,10 @@ void BusView::show(const BusData &data, int anim) {
         lv_anim_set_playback_delay(&a, 100);
         lv_anim_set_playback_time(&a, 500);
         lv_anim_set_repeat_delay(&a, 100);
-        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-        lv_anim_set_exec_cb(&a, opa_anim_cb);
-        lv_anim_start(&a);
+        // lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        // lv_anim_set_exec_cb(&a, opa_anim_cb);
+        // lv_anim_start(&a);
+        // FIX: Anim disabled to prevent crash on deletion
       } else if (mins <= 5)
         eta_col = 0xFFFF00;
       lv_obj_set_style_text_color(timeLbl, lv_color_hex(eta_col), 0);
@@ -189,17 +201,12 @@ void BusView::show(const BusData &data, int anim) {
       idx++;
     }
   }
+} // Close else block
 
-  lv_scr_load_anim_t anim_type = LV_SCR_LOAD_ANIM_NONE;
-  if (anim == 1)
-    anim_type = LV_SCR_LOAD_ANIM_MOVE_LEFT;
-  else if (anim == -1)
-    anim_type = LV_SCR_LOAD_ANIM_MOVE_RIGHT;
-  else if (anim == 2)
-    anim_type = LV_SCR_LOAD_ANIM_MOVE_BOTTOM;
-  else if (anim == -2)
-    anim_type = LV_SCR_LOAD_ANIM_MOVE_TOP;
-
-  int time = (anim == 0) ? 0 : 300;
-  lv_scr_load_anim(new_scr, anim_type, time, 0, true);
+// Manual switch to bypass Animation Engine crash
+lv_obj_t *old_scr = lv_scr_act();
+lv_scr_load(new_scr);
+if (old_scr) {
+  lv_obj_del(old_scr);
+}
 }

@@ -137,12 +137,11 @@ void GuiController::handle(uint32_t ms) {
   }
 }
 
-const char *GuiController::sanitize(const String &text) {
+String GuiController::sanitize(const String &text) {
   // Replace multi-byte UTF-8 sequences with single ASCII chars
-  // Catalan/Spanish common chars
+  // Return by value (String) is thread-safe (stack memory)
 
-  static String buf;
-  buf = text; // Copy to static buffer (reserves memory once)
+  String buf = text;
 
   // c-cedilla
   buf.replace("\xC3\xA7", "c"); // ç
@@ -182,12 +181,13 @@ const char *GuiController::sanitize(const String &text) {
   buf.replace("\xC3\x9A", "U"); // Ú
   buf.replace("\xC3\x9C", "U"); // Ü
 
-  return buf.c_str();
+  return buf;
 }
 
 // --- DELEGATED VIEW METHODS ---
 
 void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
+  Serial.printf("GUI: Show Weather (Free Heap: %d)\n", ESP.getFreeHeap());
   activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedWeather)
     cachedWeather = data;
@@ -196,6 +196,7 @@ void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
 }
 
 void GuiController::showBusScreen(const BusData &data, int anim) {
+  Serial.printf("GUI: Show Bus (Free Heap: %d)\n", ESP.getFreeHeap());
   activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedBus)
     cachedBus = data;
@@ -219,11 +220,8 @@ void GuiController::setActiveTimeLabel(lv_obj_t *label) {
 void GuiController::updateTime() {
   if (activeTimeLabel == NULL)
     return;
-  // Safety Check: Verify object is still valid in LVGL
-  if (!lv_obj_is_valid(activeTimeLabel)) {
-    activeTimeLabel = NULL;
-    return;
-  }
+  // Previously checked lv_obj_is_valid, but that is unsafe on freed pointers.
+  // We rely on STRICT NULL management now.
 
   static uint32_t lastTimeUpdate = 0;
   if (millis() - lastTimeUpdate < 1000)
