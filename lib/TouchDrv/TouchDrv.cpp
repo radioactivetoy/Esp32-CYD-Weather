@@ -92,6 +92,10 @@ bool TouchDrv::read(int16_t *x, int16_t *y) {
   // User reported reverse scroll. Adjusting mapping.
   // Try passing raw Y (or inverted X depending on orientation)
   // Assuming portrait:
+  // Debug: Print raw and mapped coordinates
+  // Serial.printf("TOUCH DEBUG: Raw X=%d Y=%d -> Mapped X=%d Y=%d\n", _x, _y,
+  // _x, _y); Just print mapped for now to see what LVGL gets
+
   *x = _x;
   *y = _y;
 

@@ -16,6 +16,7 @@ struct BusData {
   String stopName;
   String stopCode;
   std::vector<BusArrival> arrivals;
+  uint32_t lastUpdate = 0;
 };
 
 class BusService {

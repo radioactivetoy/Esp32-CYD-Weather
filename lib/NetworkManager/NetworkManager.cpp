@@ -1,16 +1,67 @@
 #include "NetworkManager.h"
-#include "GuiController.h"
 #include <WiFiManager.h>
 
 Preferences NetworkManager::prefs;
 bool NetworkManager::shouldSaveConfig = false;
 String NetworkManager::city = "Barcelona";
 String NetworkManager::busStop = "2156";
+String NetworkManager::appId = "";
+String NetworkManager::appKey = "";
 String NetworkManager::timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
 bool NetworkManager::nightMode = false;
 int NetworkManager::nightStart = 22;
 int NetworkManager::nightEnd = 7;
+int NetworkManager::dayBrightness = 100;
+int NetworkManager::nightBrightness = 10;
+String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
+String NetworkManager::ledBrightness = "medium";
+String NetworkManager::owmApiKey = "";
 WebServer NetworkManager::server(80);
+
+String NetworkManager::getLedBrightness() { return ledBrightness; }
+String NetworkManager::getOwmApiKey() { return owmApiKey; }
+int NetworkManager::getDayBrightness() { return dayBrightness; }
+int NetworkManager::getNightBrightness() { return nightBrightness; }
+
+std::vector<String> NetworkManager::getBusStops() {
+  std::vector<String> stops;
+  int start = 0;
+  while (start < busStop.length()) {
+    int comma = busStop.indexOf(',', start);
+    if (comma == -1)
+      comma = busStop.length();
+    String s = busStop.substring(start, comma);
+    s.trim();
+    if (s.length() > 0)
+      stops.push_back(s);
+    start = comma + 1;
+    if (stops.size() >= 5)
+      break; // Limit to 5 stops
+  }
+  if (stops.empty())
+    stops.push_back("2156"); // Default
+  return stops;
+}
+
+std::vector<String> NetworkManager::getCities() {
+  std::vector<String> cities;
+  int start = 0;
+  while (start < city.length()) {
+    int comma = city.indexOf(',', start);
+    if (comma == -1)
+      comma = city.length();
+    String s = city.substring(start, comma);
+    s.trim();
+    if (s.length() > 0)
+      cities.push_back(s);
+    start = comma + 1;
+    if (cities.size() >= 5)
+      break; // Limit to 5 cities
+  }
+  if (cities.empty())
+    cities.push_back("Barcelona");
+  return cities;
+}
 
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
 
@@ -20,7 +71,7 @@ void NetworkManager::handleRoot() {
   String html = "<html><head><title>Weather Clock Settings</title>";
   html +=
       "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-  html += "<style>body{font-family:sans-serif;max-width:500px;margin:20px "
+  html += "<style>body{font-family:sans-serif;max-width:500px;margin:20 "
           "auto;padding:20px;background:#1a1a1a;color:white;}";
   html += "input{width:100%;padding:10px;margin:5px 0;box-sizing:border-box;}";
   html += "input[type=submit]{background:#007bff;color:white;border:none;"
@@ -41,10 +92,24 @@ void NetworkManager::handleRoot() {
   html += "TMB App ID:<br><input type='text' name='appId' value='" + appId +
           "'><br>";
   html += "TMB App Key:<br><input type='text' name='appKey' value='" + appKey +
-          "'><br><br>";
+          "'><br>";
+  html +=
+      "OWM API Key (Optional):<br><input type='text' name='owmApiKey' value='" +
+      owmApiKey + "'><br><br>";
 
   // Improvements
-  html += "<h3>Improvements</h3>";
+  html += "<h3>Lighting</h3>";
+
+  // Brightness Sliders
+  html += "Day Brightness (" + String(dayBrightness) + "%):<br>";
+  html += "<input type='range' name='dayBrightness' min='1' max='100' value='" +
+          String(dayBrightness) + "'><br>";
+
+  html += "Night Brightness (" + String(nightBrightness) + "%):<br>";
+  html +=
+      "<input type='range' name='nightBrightness' min='1' max='100' value='" +
+      String(nightBrightness) + "'><br><br>";
+
   html += "Timezone:<br><select name='timezone'>";
 
   struct TZ {
@@ -128,6 +193,19 @@ void NetworkManager::handleRoot() {
       "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
       String(nightEnd) + "'><br><br>";
 
+  html += "<h3>Stock Ticker</h3>";
+  html += "Symbols (comma split):<br><input type='text' name='stockSymbols' "
+          "value='" +
+          stockSymbols + "'><br><br>";
+
+  html += "LED Brightness:<br><select name='ledBrightness'>";
+  String b_opts[] = {"low", "medium", "high"};
+  for (String o : b_opts) {
+    String sel = (o == ledBrightness) ? " selected" : "";
+    html += "<option value='" + o + "'" + sel + ">" + o + "</option>";
+  }
+  html += "</select><br><br>";
+
   html += "<input type='submit' value='Save & Reboot'></form>";
   html += "<p>IP: " + WiFi.localIP().toString() + "</p>";
   html += "</body></html>";
@@ -138,8 +216,9 @@ void NetworkManager::handleSave() {
   if (server.hasArg("city") && server.hasArg("busStop")) {
     city = server.arg("city");
     busStop = server.arg("busStop");
-    String appId = server.arg("appId");
-    String appKey = server.arg("appKey");
+    appId = server.arg("appId");
+    appKey = server.arg("appKey");
+    owmApiKey = server.arg("owmApiKey");
 
     // New Params
     timezone = server.arg("timezone");
@@ -147,16 +226,34 @@ void NetworkManager::handleSave() {
     nightStart = server.arg("nightStart").toInt();
     nightEnd = server.arg("nightEnd").toInt();
 
+    // Brightness Params (with safe parsing)
+    if (server.hasArg("dayBrightness"))
+      dayBrightness = server.arg("dayBrightness").toInt();
+    if (server.hasArg("nightBrightness"))
+      nightBrightness = server.arg("nightBrightness").toInt();
+
     prefs.begin("weather_cfg", false);
     prefs.putString("city", city);
     prefs.putString("busStop", busStop);
     prefs.putString("app_id", appId);
     prefs.putString("app_key", appKey);
+    prefs.putString("owmApiKey", owmApiKey);
 
     prefs.putString("timezone", timezone);
     prefs.putBool("nightMode", nightMode);
     prefs.putInt("nightStart", nightStart);
     prefs.putInt("nightEnd", nightEnd);
+
+    prefs.putInt("dayBrightness", dayBrightness);
+    prefs.putInt("nightBrightness", nightBrightness);
+
+    // Stocks
+    stockSymbols = server.arg("stockSymbols");
+    prefs.putString("stockSymbols", stockSymbols);
+
+    // LED
+    ledBrightness = server.arg("ledBrightness");
+    prefs.putString("ledBrightness", ledBrightness);
 
     prefs.end();
 
@@ -177,13 +274,10 @@ void NetworkManager::configModeCallback(WiFiManager *myWiFiManager) {
   Serial.println(myWiFiManager->getConfigPortalSSID());
 
   char buf[64];
-  snprintf(buf, sizeof(buf), "AP Active: %s",
-           myWiFiManager->getConfigPortalSSID().c_str());
-
-  if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE) {
-    GuiController::showLoadingScreen(buf);
-    xSemaphoreGive(dataMutex);
-  }
+  sprintf(buf, "Connect to AP:\n%s\nIP: 192.168.4.1",
+          myWiFiManager->getConfigPortalSSID().c_str());
+  // GuiController::showLoadingScreen(buf); // Decoupled to avoid circular dep
+  Serial.println(buf);
 }
 
 void NetworkManager::begin() {
@@ -191,8 +285,8 @@ void NetworkManager::begin() {
   prefs.begin("weather_cfg", false);
   city = prefs.getString("city", "Barcelona");
   busStop = prefs.getString("busStop", "2156");
-  String savedAppId = prefs.getString("app_id", "");
-  String savedAppKey = prefs.getString("app_key", "");
+  appId = prefs.getString("app_id", "");
+  appKey = prefs.getString("app_key", "");
 
   // Load Improvements
   timezone = prefs.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
@@ -200,19 +294,28 @@ void NetworkManager::begin() {
   nightStart = prefs.getInt("nightStart", 22);
   nightEnd = prefs.getInt("nightEnd", 7);
 
+  dayBrightness = prefs.getInt("dayBrightness", 100);    // Default 100%
+  nightBrightness = prefs.getInt("nightBrightness", 10); // Default 10%
+
+  // Load Stocks
+  stockSymbols = prefs.getString("stockSymbols", "AAPL,BTC-USD,GRF.MC");
+  ledBrightness = prefs.getString("ledBrightness", "medium");
+
+  // Custom Keys
+  owmApiKey = prefs.getString("owmApiKey", "");
+
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);
   wm.setAPCallback(configModeCallback); // Show when in AP mode
 
   // Custom Parameters
   // id/name, placeholder/prompt, default, length
-  WiFiManagerParameter custom_city("city", "City Name", city.c_str(), 32);
+  WiFiManagerParameter custom_city("city", "City Name", city.c_str(), 128);
   WiFiManagerParameter custom_busStop("busStop", "Bus Stop ID", busStop.c_str(),
                                       10);
-  WiFiManagerParameter custom_appId("appId", "TMB App ID", savedAppId.c_str(),
-                                    32);
-  WiFiManagerParameter custom_appKey("appKey", "TMB App Key",
-                                     savedAppKey.c_str(), 64);
+  WiFiManagerParameter custom_appId("appId", "TMB App ID", appId.c_str(), 32);
+  WiFiManagerParameter custom_appKey("appKey", "TMB App Key", appKey.c_str(),
+                                     64);
 
   wm.addParameter(&custom_city);
   wm.addParameter(&custom_busStop);
@@ -240,16 +343,16 @@ void NetworkManager::begin() {
     Serial.println("NETWORK: Saving New Config...");
     city = custom_city.getValue();
     busStop = custom_busStop.getValue();
-    savedAppId = custom_appId.getValue();
-    savedAppKey = custom_appKey.getValue();
+    appId = custom_appId.getValue();
+    appKey = custom_appKey.getValue();
 
     Serial.printf("NETWORK: New City: %s, BusStop: %s\n", city.c_str(),
                   busStop.c_str());
 
     prefs.putString("city", city);
     prefs.putString("busStop", busStop);
-    prefs.putString("app_id", savedAppId);
-    prefs.putString("app_key", savedAppKey);
+    prefs.putString("app_id", appId);
+    prefs.putString("app_key", appKey);
     // Note: Improvements not in WiFiManager yet for simplicity, default to NVS
     // load If you want them in CP, add WiFiManagerParameters. But WebUI is
     // better for advanced stuff.
@@ -278,21 +381,12 @@ void NetworkManager::reset() {
 String NetworkManager::getCity() { return city; }
 String NetworkManager::getBusStop() { return busStop; }
 
-String NetworkManager::getAppId() {
-  prefs.begin("weather_cfg", true);
-  String val = prefs.getString("app_id", "");
-  prefs.end();
-  return val;
-}
+String NetworkManager::getAppId() { return appId; }
 
-String NetworkManager::getAppKey() {
-  prefs.begin("weather_cfg", true);
-  String val = prefs.getString("app_key", "");
-  prefs.end();
-  return val;
-}
+String NetworkManager::getAppKey() { return appKey; }
 
 String NetworkManager::getTimezone() { return timezone; }
 bool NetworkManager::getNightModeEnabled() { return nightMode; }
 int NetworkManager::getNightStart() { return nightStart; }
 int NetworkManager::getNightEnd() { return nightEnd; }
+String NetworkManager::getStockSymbols() { return stockSymbols; }

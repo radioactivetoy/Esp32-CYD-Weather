@@ -24,6 +24,16 @@ public:
   static bool getNightModeEnabled();
   static int getNightStart();
   static int getNightEnd();
+  static String getOwmApiKey();
+
+  static int getDayBrightness();
+  static int getNightBrightness();
+
+  static String getStockSymbols();
+  static String getLedBrightness();
+  static std::vector<String>
+  getBusStops(); // New: Split "2156,1234" // low, medium, high
+  static std::vector<String> getCities(); // New: Split "Barcelona,Madrid"
 
   // Legacy method if used
   static bool isConnected() { return WiFi.status() == WL_CONNECTED; }
@@ -33,10 +43,17 @@ private:
   static WebServer server; // New: Web Server instance
   static String city;
   static String busStop;
+  static String appId;
+  static String appKey;
   static String timezone;
   static bool nightMode;
   static int nightStart;
   static int nightEnd;
+  static String owmApiKey;
+  static int dayBrightness;
+  static int nightBrightness;
+  static String stockSymbols;
+  static String ledBrightness;
   static bool shouldSaveConfig;
   static void saveConfigCallback();
   static void configModeCallback(WiFiManager *myWiFiManager);
