@@ -10,9 +10,9 @@ The interface relies on intuitive **Touch Gestures**:
 | :--- | :--- | :--- |
 | **Switch App** | **Swipe UP / DOWN** | Cycle between **Weather** ↔ **Bus** ↔ **Crypto/Stocks** |
 | **Switch Page** | **Swipe LEFT / RIGHT** | **Weather**: Next/Prev City |
-| **Switch Station**| **Tap Screen (Bus)** | **Bus**: Next Bus Stop (Silent Update) |
-| **Toggle View** | **Tap Screen (Weather)** | **Weather**: Cycle Views (Current → Hourly → Daily → Graph) |
-| **Refresh Data** | **Auto / Swipe Entry** | **Bus**: Auto-refreshes on entry (Instant) & every 60s <br> **Stock**: 5 min |
+| **Switch Station**| **Tap Screen (Bus)** | **Bus**: Next Bus Stop |
+| **Toggle View** | **Tap Screen (Weather)** | **Weather**: Cycle Views (Current → Hourly → Daily) |
+| **Refresh Data** | **Auto / Swipe / Tap** | **Bus**: Auto-refreshes on entry, on tap, & every 60s <br> **Stock**: 5 min <br> **Weather**: 10 min |
 
 ## ✨ Features (Polished)
 
@@ -22,20 +22,12 @@ The interface relies on intuitive **Touch Gestures**:
     *   **Rain Probability**: Shown in blue appended to description (e.g., "Overcast 30%") and in forecast lists.
     *   **Hourly**: Scrollable list of 24h forecast.
     *   **Daily**: 7-Day forecast with high/low temps and mid-day icons.
-    *   **Graph**: 24h Temperature Trend visualization.
-    *   **Unified Header**: Clean 40px Header (Title Left, Time Right) matches all apps.
-
 2.  **TMB Bus Tracker**:
     *   **Real-time Arrivals**: Shows minutes/seconds remaining.
-    *   **Color Coded**:
-        *   🔴 Arriving Now (< 2 min) - *Pulses!*
-        *   🟡 Approaching (< 5 min)
-        *   🟢 Free Flow (> 5 min)
-    *   **Optimized Header**: Max-width stop name with background watermarked icon.
-    *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen.
+    *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen or tapping to switch stations.
 
 3.  **Stock/Crypto Ticker**:
-    *   **Real-time Prices**: Finnhub API.
+    *   **Real-time Prices**: Yahoo Finance Public API (No API key required).
     *   **Trend Tracking**: Green/Red indicators for price changes.
     *   **Clean List**: Scrollable view of all configured symbols.
 
@@ -71,7 +63,7 @@ No need to edit code! Configure everything via the web interface.
     -   Find the device IP in the Serial Monitor (e.g., `192.168.1.45`).
     -   Open that IP in your browser.
 3.  **Customize**:
-    -   **City & Bus Stop**: Set your location.
+    -   **City & Bus Stop**: Set your location (comma-separated for multiple cities/stops).
     -   **Stocks**: Comma-separated symbols (e.g., `AAPL,BINANCE:BTCUSDT`).
     -   **Lighting**:
         -   **Day Brightness**: Slider (1-100%) for active hours.
@@ -79,31 +71,29 @@ No need to edit code! Configure everything via the web interface.
         -   **Night Mode**: Enable auto-dimming between specific hours.
     -   **Timezone**: Select your local time.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
-    -   **API Keys**: Enter your TMB App ID/Key, Finnhub API Key, and OpenWeatherMap API Key.
+    -   **API Keys**: Enter your TMB App ID/Key and OpenWeatherMap API Key.
 
 ## Controls
 -   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).
 -   **Weather App**:
     -   **Tap Screen**: Toggle Forecast Mode (Current -> Hourly -> Daily).
-    -   **Swipe Left/Right**: Switch between configured Cities.
+    -   **Swipe Left/Right**: Switch between configured Cities (comma-separated list in Web UI).
 -   **Bus App**:
-    -   **Tap Screen**: Switch to next Bus Stop (Silent background update).
+    -   **Tap Screen**: Switch to next Bus Stop (if multiple are configured as comma-separated list).
 -   **Stocks App**:
     -   Displays configured stock quotes with real-time price/change.
 
 ## Recent Updates
+-   **NVS Optimization**: Reduced flash memory wear by caching API credentials in RAM instead of reading NVS every 60 seconds.
 -   **OpenWeatherMap Migration**: Fully replaced Open-Meteo for Forecasts, Geocoding, and AQI for better accuracy.
 -   **Enhanced Rain UI**: Rain probability now displayed alongside weather description and in forecast lists.
 -   **Configurable Backlight**: Set specific brightness levels for Day and Night modes via Web UI.
--   **UI Refinements**: High-contrast 2px borders, optimized layouts, centered temperature, and standardized fonts.
 -   **Touch Navigation**: Simplified Bus Station switching via tap.
--   **Stock View**: Improved row spacing (70px) and font sizing to prevent text clipping.
 
 ## API Keys
 
 You need free API keys for data sources:
 -   **TMB API**: Register at [developer.tmb.cat](https://developer.tmb.cat/) (Bus Data).
--   **Finnhub**: Register at [finnhub.io](https://finnhub.io/) (Stock Data).
 -   **OpenWeatherMap**: Register at [openweathermap.org](https://openweathermap.org/) (Weather Data).
 
 ## Project Structure
