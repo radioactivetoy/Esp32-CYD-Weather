@@ -43,6 +43,8 @@ private:
   static WebServer server; // New: Web Server instance
   static String city;
   static String busStop;
+  static String appId;
+  static String appKey;
   static String timezone;
   static bool nightMode;
   static int nightStart;

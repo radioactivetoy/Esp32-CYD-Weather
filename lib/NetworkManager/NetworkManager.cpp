@@ -5,6 +5,8 @@ Preferences NetworkManager::prefs;
 bool NetworkManager::shouldSaveConfig = false;
 String NetworkManager::city = "Barcelona";
 String NetworkManager::busStop = "2156";
+String NetworkManager::appId = "";
+String NetworkManager::appKey = "";
 String NetworkManager::timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
 bool NetworkManager::nightMode = false;
 int NetworkManager::nightStart = 22;
@@ -214,8 +216,8 @@ void NetworkManager::handleSave() {
   if (server.hasArg("city") && server.hasArg("busStop")) {
     city = server.arg("city");
     busStop = server.arg("busStop");
-    String appId = server.arg("appId");
-    String appKey = server.arg("appKey");
+    appId = server.arg("appId");
+    appKey = server.arg("appKey");
     owmApiKey = server.arg("owmApiKey");
 
     // New Params
@@ -283,8 +285,8 @@ void NetworkManager::begin() {
   prefs.begin("weather_cfg", false);
   city = prefs.getString("city", "Barcelona");
   busStop = prefs.getString("busStop", "2156");
-  String savedAppId = prefs.getString("app_id", "");
-  String savedAppKey = prefs.getString("app_key", "");
+  appId = prefs.getString("app_id", "");
+  appKey = prefs.getString("app_key", "");
 
   // Load Improvements
   timezone = prefs.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
@@ -311,10 +313,9 @@ void NetworkManager::begin() {
   WiFiManagerParameter custom_city("city", "City Name", city.c_str(), 128);
   WiFiManagerParameter custom_busStop("busStop", "Bus Stop ID", busStop.c_str(),
                                       10);
-  WiFiManagerParameter custom_appId("appId", "TMB App ID", savedAppId.c_str(),
-                                    32);
-  WiFiManagerParameter custom_appKey("appKey", "TMB App Key",
-                                     savedAppKey.c_str(), 64);
+  WiFiManagerParameter custom_appId("appId", "TMB App ID", appId.c_str(), 32);
+  WiFiManagerParameter custom_appKey("appKey", "TMB App Key", appKey.c_str(),
+                                     64);
 
   wm.addParameter(&custom_city);
   wm.addParameter(&custom_busStop);
@@ -342,16 +343,16 @@ void NetworkManager::begin() {
     Serial.println("NETWORK: Saving New Config...");
     city = custom_city.getValue();
     busStop = custom_busStop.getValue();
-    savedAppId = custom_appId.getValue();
-    savedAppKey = custom_appKey.getValue();
+    appId = custom_appId.getValue();
+    appKey = custom_appKey.getValue();
 
     Serial.printf("NETWORK: New City: %s, BusStop: %s\n", city.c_str(),
                   busStop.c_str());
 
     prefs.putString("city", city);
     prefs.putString("busStop", busStop);
-    prefs.putString("app_id", savedAppId);
-    prefs.putString("app_key", savedAppKey);
+    prefs.putString("app_id", appId);
+    prefs.putString("app_key", appKey);
     // Note: Improvements not in WiFiManager yet for simplicity, default to NVS
     // load If you want them in CP, add WiFiManagerParameters. But WebUI is
     // better for advanced stuff.
@@ -380,19 +381,9 @@ void NetworkManager::reset() {
 String NetworkManager::getCity() { return city; }
 String NetworkManager::getBusStop() { return busStop; }
 
-String NetworkManager::getAppId() {
-  prefs.begin("weather_cfg", true);
-  String val = prefs.getString("app_id", "");
-  prefs.end();
-  return val;
-}
+String NetworkManager::getAppId() { return appId; }
 
-String NetworkManager::getAppKey() {
-  prefs.begin("weather_cfg", true);
-  String val = prefs.getString("app_key", "");
-  prefs.end();
-  return val;
-}
+String NetworkManager::getAppKey() { return appKey; }
 
 String NetworkManager::getTimezone() { return timezone; }
 bool NetworkManager::getNightModeEnabled() { return nightMode; }
