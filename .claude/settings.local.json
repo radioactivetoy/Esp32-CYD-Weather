@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python tools/convert_meteocons.py)",
+      "Bash(python3 tools/convert_meteocons.py)",
+      "Bash(where py:*)",
+      "Bash(where python.exe)",
+      "Read(//c/Users/nesto/AppData/Local/Programs/**)",
+      "Bash(ls /c/Python*)",
+      "Read(//c/Users/nesto/AppData/Local/Microsoft/WindowsApps/**)",
+      "Bash(/c/Users/nesto/miniconda3/python.exe tools/convert_meteocons.py)",
+      "WebFetch(domain:api.github.com)"
+    ]
+  }
+}
