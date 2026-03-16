@@ -6,6 +6,7 @@
 #include <TFT_eSPI.h>
 #include <cstdio>
 #include <lvgl.h>
+#include <WiFi.h>
 
 // --- SCREEN DRIVER SETUP ---
 static const uint16_t screenWidth = 240;
@@ -75,6 +76,9 @@ static uint32_t lastGestureTime = 0; // Used to suppress tap after swipe
 
 // Custom Font
 LV_FONT_DECLARE(font_intl_16);
+LV_FONT_DECLARE(lv_font_montserrat_14);
+LV_FONT_DECLARE(lv_font_montserrat_16);
+LV_FONT_DECLARE(lv_font_montserrat_20);
 
 void GuiController::init() {
   guiMutex = xSemaphoreCreateMutex();
@@ -176,19 +180,22 @@ void GuiController::drawLoadingScreen(const char *msg) {
   lv_obj_clean(scr);
   activeTimeLabel = NULL;
 
-  lv_obj_set_style_bg_color(scr, lv_color_hex(0x0000AA), 0);
+  lv_obj_set_style_bg_color(scr, lv_color_hex(0x001830), 0);
+  lv_obj_set_style_bg_grad_color(scr, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_grad_dir(scr, LV_GRAD_DIR_VER, 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
+  lv_obj_t *title = lv_label_create(scr);
+  lv_label_set_text(title, "Weather Station");
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, -30);
+  lv_obj_set_style_text_color(title, lv_color_hex(0x00CCFF), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+
   lv_obj_t *label = lv_label_create(scr);
-  lv_label_set_text(label, msg ? msg : "Loading...");
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
-  // Note: Fonts are declared in Views now, but we can assume default or
-  // montserrat if available globally. Ideally Views handle all drawing. But for
-  // loading screen, default font is fine or reuse montserrat if declared here.
-  // For safety, let's use default font or declare one locally if needed.
-  // Actually, let's just use default LVGL font for Loading to avoid
-  // dependency/declaration mess or rely on what's available.
+  lv_label_set_text(label, msg ? msg : "Starting...");
+  lv_obj_align(label, LV_ALIGN_CENTER, 0, 15);
+  lv_obj_set_style_text_color(label, lv_color_hex(0xCCCCCC), 0);
+  lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
 }
 
 void GuiController::handle(uint32_t ms) {
@@ -432,7 +439,7 @@ void GuiController::handleScreenClick(lv_event_t *e) {
   lastClickTime = millis();
 
   if (currentApp == APP_WEATHER) {
-    forecastMode = (forecastMode + 1) % 4; // 0:Current 1:Hourly 2:7Days 3:Chart
+    forecastMode = (forecastMode + 1) % 3; // 0:Current 1:Hourly 2:7Days
     pendingScreenChange = SCREEN_WEATHER;
     pendingScreenAnim = 3; // fade transition for forecast mode cycle
   } else if (currentApp == APP_BUS) {
@@ -446,4 +453,64 @@ void GuiController::handleScreenClick(lv_event_t *e) {
 
 void GuiController::handleLongPress(lv_event_t *e) {
   longPressTriggered = true; // main.cpp polls this and calls the right trigger
+}
+
+void GuiController::showInfoOverlay(lv_event_t *e) {
+  lv_event_stop_bubbling(e);
+
+  lv_obj_t *overlay = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(overlay, 210, 198);
+  lv_obj_align(overlay, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(overlay, lv_color_hex(0x111122), 0);
+  lv_obj_set_style_bg_opa(overlay, LV_OPA_90, 0);
+  lv_obj_set_style_radius(overlay, 12, 0);
+  lv_obj_set_style_border_color(overlay, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_border_width(overlay, 1, 0);
+  lv_obj_set_flex_flow(overlay, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(overlay, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_all(overlay, 10, 0);
+  lv_obj_set_style_pad_row(overlay, 4, 0);
+  lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(overlay, [](lv_event_t *ev) {
+    lv_obj_del_async(lv_event_get_target(ev));
+  }, LV_EVENT_CLICKED, NULL);
+
+  char buf[64];
+  auto addLine = [&](const char *text, uint32_t col) {
+    lv_obj_t *lbl = lv_label_create(overlay);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(col), 0);
+  };
+
+  addLine("Device Info", 0xFFD700);
+
+  lv_obj_t *sep = lv_obj_create(overlay);
+  lv_obj_set_size(sep, LV_PCT(100), 1);
+  lv_obj_set_style_bg_color(sep, lv_color_hex(0x555555), 0);
+  lv_obj_set_style_border_width(sep, 0, 0);
+  lv_obj_set_style_pad_all(sep, 0, 0);
+  lv_obj_clear_flag(sep, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+  String ssid = WiFi.SSID();
+  snprintf(buf, sizeof(buf), "WiFi: %s", ssid.length() > 0 ? ssid.c_str() : "---");
+  addLine(buf, 0xCCCCCC);
+
+  snprintf(buf, sizeof(buf), "IP: %s", WiFi.localIP().toString().c_str());
+  addLine(buf, 0xCCCCCC);
+
+  snprintf(buf, sizeof(buf), "Heap: %d KB free", (int)(ESP.getFreeHeap() / 1024));
+  addLine(buf, 0xCCCCCC);
+
+  uint32_t s = millis() / 1000;
+  snprintf(buf, sizeof(buf), "Up: %dh %dm", (int)(s / 3600), (int)((s % 3600) / 60));
+  addLine(buf, 0xCCCCCC);
+
+  snprintf(buf, sizeof(buf), "Cities: %d  Bus stops: %d",
+           (int)cityCount, (int)busStopCount);
+  addLine(buf, 0xCCCCCC);
+
+  addLine("Tap to close", 0x777777);
 }

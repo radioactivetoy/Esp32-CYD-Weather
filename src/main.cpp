@@ -136,6 +136,15 @@ void loop() {
       GuiController::isWeatherScreenActive()) {
     GuiController::requestRefresh();
   }
+  {
+    static bool wasStockUpdating = false;
+    bool nowStockUpdating = DataManager::isStockUpdating();
+    if (nowStockUpdating != wasStockUpdating &&
+        GuiController::isStockScreenActive()) {
+      GuiController::requestRefresh();
+    }
+    wasStockUpdating = nowStockUpdating;
+  }
 
   // --- LONG PRESS: Manual Refresh ---
   if (GuiController::longPressTriggered.exchange(false)) {

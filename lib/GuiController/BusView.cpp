@@ -59,7 +59,9 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(header, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
+  lv_obj_add_flag(header, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE);
+  lv_obj_add_event_cb(header, GuiController::showInfoOverlay,
+                      LV_EVENT_LONG_PRESSED, NULL);
 
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {
@@ -112,7 +114,7 @@ void BusView::show(const BusData &data, int anim) {
   // List
   lv_obj_t *list = lv_obj_create(new_scr);
   Serial.println("BusView: List Created");
-  lv_obj_set_size(list, LV_PCT(100), 280);
+  lv_obj_set_size(list, LV_PCT(100), 258);
   lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40);
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x000000), 0);
@@ -177,14 +179,19 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_style_text_font(dest, &lv_font_montserrat_14, 0);
 
       lv_obj_t *timeLbl = lv_label_create(row);
-      lv_label_set_text(timeLbl, arr.text.c_str());
       lv_obj_set_width(timeLbl, 55);
       lv_obj_set_style_text_align(timeLbl, LV_TEXT_ALIGN_RIGHT, 0);
       lv_obj_set_style_text_font(timeLbl, &lv_font_montserrat_14, 0);
 
       uint32_t eta_col = 0x00FF00;
       int mins = arr.seconds / 60;
-      if (mins <= 2) {
+      if (arr.seconds < 60) {
+        lv_label_set_text(timeLbl, "Due");
+        eta_col = 0xFF2222;
+      } else {
+        lv_label_set_text(timeLbl, arr.text.c_str());
+      }
+      if (arr.seconds >= 60 && mins <= 2) {
         eta_col = 0xFF4500;
         lv_anim_t a;
         lv_anim_init(&a);
@@ -197,12 +204,26 @@ void BusView::show(const BusData &data, int anim) {
         // Opacity pulse intentionally disabled: LV_ANIM_REPEAT_INFINITE on a
         // child object can fire after auto_del frees the old screen. Re-enable
         // only if LVGL animation lifecycle is explicitly managed.
-      } else if (mins <= 5)
+      } else if (arr.seconds >= 60 && mins <= 5)
         eta_col = 0xFFFF00;
       lv_obj_set_style_text_color(timeLbl, lv_color_hex(eta_col), 0);
 
       idx++;
     }
+  }
+
+  if (data.lastUpdate > 0) {
+    lv_obj_t *upd_lbl = lv_label_create(new_scr);
+    uint32_t secAgo = (millis() - data.lastUpdate) / 1000;
+    char updBuf[32];
+    if (secAgo < 60)
+      snprintf(updBuf, sizeof(updBuf), "Updated %ds ago", (int)secAgo);
+    else
+      snprintf(updBuf, sizeof(updBuf), "Updated %dm ago", (int)(secAgo / 60));
+    lv_label_set_text(upd_lbl, updBuf);
+    lv_obj_align(upd_lbl, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_set_style_text_font(upd_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(upd_lbl, lv_color_hex(0x888888), 0);
   }
 
   lv_scr_load_anim_t anim_type = LV_SCR_LOAD_ANIM_NONE;

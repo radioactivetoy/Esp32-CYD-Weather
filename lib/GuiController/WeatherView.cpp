@@ -184,6 +184,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_clear_flag(header_row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(header_row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE |
                                   LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_event_cb(header_row, GuiController::showInfoOverlay,
+                      LV_EVENT_LONG_PRESSED, NULL);
 
   lv_obj_t *city_lbl = lv_label_create(header_row);
   lv_obj_set_width(city_lbl, 160); // Reduced to 160 as per user request
@@ -199,8 +201,6 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     titleText += " - Hourly";
   else if (forecastMode == 2)
     titleText += " - 7 Days";
-  else if (forecastMode == 3)
-    titleText += " - Chart";
   lv_label_set_text(city_lbl, titleText.c_str());
 
   struct tm timeinfo;
@@ -286,9 +286,16 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_t *temp_lbl = lv_label_create(temp_row);
     snprintf(buf, sizeof(buf), "%.1f°C", data.currentTemp);
     lv_label_set_text(temp_lbl, buf);
-    lv_obj_set_style_text_font(temp_lbl, &lv_font_montserrat_32,
-                               0); // Upgrade 24->32
-    lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(temp_lbl, &lv_font_montserrat_32, 0);
+    {
+      uint32_t tc;
+      if (data.currentTemp < 0)        tc = 0x88AAFF;
+      else if (data.currentTemp < 10)  tc = 0xAADDFF;
+      else if (data.currentTemp < 20)  tc = 0xFFFFFF;
+      else if (data.currentTemp < 28)  tc = 0xFFCC44;
+      else                             tc = 0xFF5533;
+      lv_obj_set_style_text_color(temp_lbl, lv_color_hex(tc), 0);
+    }
 
     // Right Arrow - Floating to keep Temp centered
     lv_obj_t *arrow_r = lv_label_create(temp_row);
@@ -307,10 +314,16 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x00CC00), 0);
     }
 
-    // H/L/F (combined single line)
+    // H/L/F (combined single line, F: color-coded by delta)
     lv_obj_t *hl_lbl = lv_label_create(glass_card);
-    snprintf(buf, sizeof(buf), "H:%.0f\xC2\xB0 L:%.0f\xC2\xB0  F:%.0f\xC2\xB0",
-             data.daily[0].maxTemp, data.daily[0].minTemp, data.currentFeelsLike);
+    lv_label_set_recolor(hl_lbl, true);
+    {
+      float fd = data.currentFeelsLike - data.currentTemp;
+      uint32_t fc = (fd <= -3.0f) ? 0x88AAFF : (fd >= 3.0f) ? 0xFF7744 : 0xEEEEEE;
+      snprintf(buf, sizeof(buf), "H:%.0f\xC2\xB0 L:%.0f\xC2\xB0  #%06X F:%.0f\xC2\xB0#",
+               data.daily[0].maxTemp, data.daily[0].minTemp,
+               (unsigned int)fc, data.currentFeelsLike);
+    }
     lv_label_set_text(hl_lbl, buf);
     lv_obj_set_style_text_font(hl_lbl, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xEEEEEE), 0);
@@ -411,7 +424,13 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     char windLabel[16];
     snprintf(windLabel, sizeof(windLabel), "Wind %s",
              getWindDir(data.windDirection));
-    add_pill(windLabel, buf, 0x90EE90);
+    {
+      uint32_t wc = 0x90EE90;
+      if (data.windSpeed >= 20) wc = 0xFFFF00;
+      if (data.windSpeed >= 40) wc = 0xFF9900;
+      if (data.windSpeed >= 60) wc = 0xFF4444;
+      add_pill(windLabel, buf, wc);
+    }
 
     {
       snprintf(buf, sizeof(buf), "UV %.0f", data.currentUVIndex);
@@ -435,6 +454,32 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     else if (data.currentAQI >= 5)
       aqiColor = 0xFF4500; // Very Poor (OrangeRed)
     add_pill("Quality", aqiBuf, aqiColor);
+
+    // City page indicator dots
+    if (GuiController::cityCount > 1) {
+      lv_obj_t *dot_row = lv_obj_create(bg_grad);
+      lv_obj_set_size(dot_row, LV_SIZE_CONTENT, 8);
+      lv_obj_align_to(dot_row, glass_card, LV_ALIGN_OUT_BOTTOM_MID, 0, 4);
+      lv_obj_set_flex_flow(dot_row, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(dot_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                            LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_bg_opa(dot_row, LV_OPA_TRANSP, 0);
+      lv_obj_set_style_border_width(dot_row, 0, 0);
+      lv_obj_set_style_pad_all(dot_row, 0, 0);
+      lv_obj_set_style_pad_column(dot_row, 5, 0);
+      lv_obj_clear_flag(dot_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+      int cur = GuiController::getCityIndex();
+      int tot = GuiController::cityCount;
+      for (int i = 0; i < tot; i++) {
+        lv_obj_t *d = lv_obj_create(dot_row);
+        bool active = (i == cur);
+        lv_obj_set_size(d, active ? 10 : 6, 6);
+        lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(d, 0, 0);
+        lv_obj_set_style_bg_color(d, lv_color_hex(active ? 0xFFFFFF : 0x666666), 0);
+        lv_obj_clear_flag(d, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+      }
+    }
 
   } else if (forecastMode == 1 || forecastMode == 2) {
     // === LIST VIEWS ===
@@ -548,106 +593,6 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_label_set_text(temp_lbl, buf);
       lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
     }
-  } else if (forecastMode == 3) {
-    // === CHART VIEW (24h temp + rain probability) ===
-
-    lv_obj_t *chart_cont = lv_obj_create(bg_grad);
-    lv_obj_set_size(chart_cont, LV_PCT(100), 275);
-    lv_obj_align(chart_cont, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_flex_flow(chart_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(chart_cont, LV_FLEX_ALIGN_START,
-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_opa(chart_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(chart_cont, 0, 0);
-    lv_obj_set_style_pad_all(chart_cont, 4, 0);
-    lv_obj_set_style_pad_row(chart_cont, 4, 0);
-    lv_obj_clear_flag(chart_cont, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(chart_cont, LV_OBJ_FLAG_EVENT_BUBBLE |
-                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
-
-    // --- Temperature line chart ---
-    lv_obj_t *temp_title = lv_label_create(chart_cont);
-    lv_label_set_text(temp_title, "Temperature (24h)");
-    lv_obj_set_style_text_font(temp_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(temp_title, lv_color_hex(0xEEEEEE), 0);
-
-    lv_obj_t *temp_chart = lv_chart_create(chart_cont);
-    lv_obj_set_size(temp_chart, LV_PCT(100), 105);
-    lv_chart_set_type(temp_chart, LV_CHART_TYPE_LINE);
-    lv_chart_set_point_count(temp_chart, 24);
-    lv_obj_set_style_bg_color(temp_chart, lv_color_hex(0x1A1A2A), 0);
-    lv_obj_set_style_border_color(temp_chart, lv_color_hex(0x666666), 0);
-    lv_obj_set_style_border_width(temp_chart, 1, 0);
-    lv_obj_clear_flag(temp_chart, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(temp_chart, LV_OBJ_FLAG_EVENT_BUBBLE |
-                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
-
-    // Find temp range
-    float minT = 999, maxT = -999;
-    for (int i = 0; i < 24; i++) {
-      if (data.hourly[i].temp < minT) minT = data.hourly[i].temp;
-      if (data.hourly[i].temp > maxT) maxT = data.hourly[i].temp;
-    }
-    lv_chart_set_range(temp_chart, LV_CHART_AXIS_PRIMARY_Y,
-                       (lv_coord_t)(minT - 2), (lv_coord_t)(maxT + 2));
-    lv_chart_set_axis_tick(temp_chart, LV_CHART_AXIS_PRIMARY_Y, 6, 3, 5, 2,
-                           true, 30);
-    lv_chart_set_div_line_count(temp_chart, 4, 0);
-
-    lv_chart_series_t *temp_ser =
-        lv_chart_add_series(temp_chart, lv_color_hex(0xFF8800),
-                            LV_CHART_AXIS_PRIMARY_Y);
-    for (int i = 0; i < 24; i++)
-      lv_chart_set_next_value(temp_chart, temp_ser,
-                              (lv_coord_t)data.hourly[i].temp);
-
-    // Hour labels row (shared between charts)
-    lv_obj_t *hour_row = lv_obj_create(chart_cont);
-    lv_obj_set_size(hour_row, LV_PCT(100), 18);
-    lv_obj_set_style_bg_opa(hour_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(hour_row, 0, 0);
-    lv_obj_set_style_pad_all(hour_row, 0, 0);
-    lv_obj_set_flex_flow(hour_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(hour_row, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(hour_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(hour_row, LV_OBJ_FLAG_EVENT_BUBBLE);
-    const char *hrLabels[] = {"Now", "+6h", "+12h", "+18h", "+24h"};
-    for (int i = 0; i < 5; i++) {
-      lv_obj_t *hl = lv_label_create(hour_row);
-      lv_label_set_text(hl, hrLabels[i]);
-      lv_obj_set_style_text_font(hl, &lv_font_montserrat_14, 0);
-      lv_obj_set_style_text_color(hl, lv_color_hex(0xAAAAAA), 0);
-    }
-
-    // --- Precipitation bar chart ---
-    lv_obj_t *rain_title = lv_label_create(chart_cont);
-    lv_label_set_text(rain_title, "Rain Probability (%)");
-    lv_obj_set_style_text_font(rain_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(rain_title, lv_color_hex(0xEEEEEE), 0);
-
-    lv_obj_t *rain_chart = lv_chart_create(chart_cont);
-    lv_obj_set_size(rain_chart, LV_PCT(100), 85);
-    lv_chart_set_type(rain_chart, LV_CHART_TYPE_BAR);
-    lv_chart_set_point_count(rain_chart, 24);
-    lv_obj_set_style_bg_color(rain_chart, lv_color_hex(0x1A1A2A), 0);
-    lv_obj_set_style_border_color(rain_chart, lv_color_hex(0x666666), 0);
-    lv_obj_set_style_border_width(rain_chart, 1, 0);
-    lv_obj_clear_flag(rain_chart, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(rain_chart, LV_OBJ_FLAG_EVENT_BUBBLE |
-                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
-
-    lv_chart_set_range(rain_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
-    lv_chart_set_axis_tick(rain_chart, LV_CHART_AXIS_PRIMARY_Y, 6, 3, 5, 2,
-                           true, 30);
-    lv_chart_set_div_line_count(rain_chart, 4, 0);
-
-    lv_chart_series_t *rain_ser =
-        lv_chart_add_series(rain_chart, lv_color_hex(0x00BFFF),
-                            LV_CHART_AXIS_PRIMARY_Y);
-    for (int i = 0; i < 24; i++)
-      lv_chart_set_next_value(rain_chart, rain_ser,
-                              (lv_coord_t)(data.hourly[i].pop * 100));
   }
 
   // Animation
@@ -660,8 +605,6 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     anim_type = LV_SCR_LOAD_ANIM_MOVE_BOTTOM;
   else if (anim == -2)
     anim_type = LV_SCR_LOAD_ANIM_MOVE_TOP;
-  else if (anim == 3)
-    anim_type = LV_SCR_LOAD_ANIM_FADE_ON;
 
   int time = (anim == 0) ? 0 : 300;
   lv_scr_load_anim(new_scr, anim_type, time, 0, true);

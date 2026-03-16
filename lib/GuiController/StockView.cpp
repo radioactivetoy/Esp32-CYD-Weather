@@ -35,8 +35,10 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(header,
-                  LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_flag(header, LV_OBJ_FLAG_CLICKABLE |
+                               LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_event_cb(header, GuiController::showInfoOverlay,
+                      LV_EVENT_LONG_PRESSED, NULL);
 
   lv_obj_t *title = lv_label_create(header);
   lv_label_set_text(title, "Market Ticker");
