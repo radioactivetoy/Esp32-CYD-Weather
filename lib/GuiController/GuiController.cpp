@@ -29,33 +29,39 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
 GuiController::AppMode GuiController::currentApp = GuiController::APP_WEATHER;
 
 // Bus State
-int GuiController::currentBusIndex = 0;
-int GuiController::busStopCount = 1;
-bool GuiController::busStationChanged = false;
+std::atomic<int> GuiController::currentBusIndex{0};
+std::atomic<int> GuiController::busStopCount{1};
+std::atomic<bool> GuiController::busStationChanged{false};
 int GuiController::getBusIndex() { return currentBusIndex; }
 void GuiController::setBusStopCount(int count) { busStopCount = count; }
 bool GuiController::hasBusStationChanged() { return busStationChanged; }
 void GuiController::clearBusStationChanged() { busStationChanged = false; }
 
 // City State
-int GuiController::currentCityIndex = 0;
-int GuiController::cityCount = 1;
-bool GuiController::cityChanged = false;
+std::atomic<int> GuiController::currentCityIndex{0};
+std::atomic<int> GuiController::cityCount{1};
+std::atomic<bool> GuiController::cityChanged{false};
 int GuiController::getCityIndex() { return currentCityIndex; }
 void GuiController::setCityCount(int count) { cityCount = count; }
 bool GuiController::hasCityChanged() { return cityChanged; }
 void GuiController::clearCityChanged() { cityChanged = false; }
 
 bool GuiController::isBusScreenActive() { return currentApp == APP_BUS; }
-void GuiController::updateBusCache(const BusData &data) { cachedBus = data; }
 bool GuiController::isStockScreenActive() { return currentApp == APP_STOCK; }
+bool GuiController::isWeatherScreenActive() { return currentApp == APP_WEATHER; }
+void GuiController::updateWeatherCache(const WeatherData &data) { cachedWeather = data; }
+void GuiController::updateBusCache(const BusData &data) { cachedBus = data; }
 void GuiController::updateStockCache(const std::vector<StockItem> &data) {
   cachedStock = data;
 }
 
 // Queue & Cache
 String GuiController::pendingMsg = "";
-bool GuiController::needsUpdate = false;
+volatile bool GuiController::needsUpdate = false;
+GuiController::PendingScreen GuiController::pendingScreenChange = GuiController::SCREEN_NONE;
+int GuiController::pendingScreenAnim = 0;
+uint32_t GuiController::screenAnimUntil = 0;
+int GuiController::pendingCitySwipeAnim = 0;
 SemaphoreHandle_t GuiController::guiMutex = NULL;
 WeatherData GuiController::cachedWeather;
 BusData GuiController::cachedBus;
@@ -64,6 +70,7 @@ std::vector<StockItem> GuiController::cachedStock;
 // Local Controller State
 static lv_obj_t *activeTimeLabel = NULL;
 static int forecastMode = 0; // 0: Current, 1: Hourly, 2: Daily, 3: Chart
+static uint32_t lastGestureTime = 0; // Used to suppress tap after swipe
 
 // Custom Font
 LV_FONT_DECLARE(font_intl_16);
@@ -107,6 +114,60 @@ void GuiController::update() {
     }
   }
   lv_timer_handler();
+  // Apply any screen transition requested from within event callbacks.
+  // Must run AFTER lv_timer_handler() to avoid re-entrant lv_scr_load_anim calls
+  // which corrupt LVGL's internal event dispatch and cause LoadProhibited crashes.
+  applyPendingScreenChange();
+}
+
+void GuiController::applyPendingScreenChange() {
+  if (pendingScreenChange == SCREEN_NONE)
+    return;
+  // Wait for any ongoing screen transition animation to finish before
+  // starting another. Calling lv_scr_load_anim while an anim is active
+  // corrupts LVGL's internal screen/event state and causes LoadProhibited.
+  if (millis() < screenAnimUntil)
+    return;
+  PendingScreen toShow = pendingScreenChange;
+  int anim = pendingScreenAnim;
+  pendingScreenChange = SCREEN_NONE;
+  if (anim != 0)
+    screenAnimUntil = millis() + 350; // 300ms anim + 50ms buffer
+  switch (toShow) {
+  case SCREEN_WEATHER:
+    showWeatherScreen(cachedWeather, anim);
+    break;
+  case SCREEN_BUS:
+    showBusScreen(cachedBus, anim);
+    break;
+  case SCREEN_STOCK:
+    showStockScreen(cachedStock, anim);
+    break;
+  default:
+    break;
+  }
+}
+
+void GuiController::requestRefresh() {
+  // Only set pending if nothing else is already queued (don't overwrite a
+  // swipe animation with a background data refresh).
+  if (pendingScreenChange != SCREEN_NONE)
+    return;
+  switch (currentApp) {
+  case APP_WEATHER:
+    pendingScreenChange = SCREEN_WEATHER;
+    pendingScreenAnim = pendingCitySwipeAnim;
+    pendingCitySwipeAnim = 0; // consume — subsequent refreshes (e.g. yellow dot) use anim=0
+    break;
+  case APP_BUS:
+    pendingScreenChange = SCREEN_BUS;
+    pendingScreenAnim = 0;
+    break;
+  case APP_STOCK:
+    pendingScreenChange = SCREEN_STOCK;
+    pendingScreenAnim = 0;
+    break;
+  }
 }
 
 void GuiController::drawLoadingScreen(const char *msg) {
@@ -187,28 +248,46 @@ String GuiController::sanitize(const String &text) {
 // --- DELEGATED VIEW METHODS ---
 
 void GuiController::showWeatherScreen(const WeatherData &data, int anim) {
-  Serial.printf("GUI: Show Weather (Free Heap: %d)\n", ESP.getFreeHeap());
+  int32_t heapBefore = ESP.getFreeHeap();
+  Serial.printf("GUI: Show Weather (Before Heap: %d)\n", heapBefore);
+
   activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedWeather)
     cachedWeather = data;
   WeatherView::show(data, anim, forecastMode);
-  // activeTimeLabel will be updated by WeatherView::show if successful
+
+  int32_t heapAfter = ESP.getFreeHeap();
+  Serial.printf("GUI: Show Weather (After Heap: %d, delta: %d)\n", heapAfter,
+                heapAfter - heapBefore);
 }
 
 void GuiController::showBusScreen(const BusData &data, int anim) {
-  Serial.printf("GUI: Show Bus (Free Heap: %d)\n", ESP.getFreeHeap());
-  activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
+  int32_t heapBefore = ESP.getFreeHeap();
+  Serial.printf("GUI: Show Bus (Before Heap: %d)\n", heapBefore);
+
+  activeTimeLabel = NULL;
   if (&data != &cachedBus)
     cachedBus = data;
   BusView::show(data, anim);
+
+  int32_t heapAfter = ESP.getFreeHeap();
+  Serial.printf("GUI: Show Bus (After Heap: %d, delta: %d)\n", heapAfter,
+                heapAfter - heapBefore);
 }
 
 void GuiController::showStockScreen(const std::vector<StockItem> &data,
                                     int anim) {
+  int32_t heapBefore = ESP.getFreeHeap();
+  Serial.printf("GUI: Show Stock (Before Heap: %d)\n", heapBefore);
+
   activeTimeLabel = NULL; // CRITICAL: Reset pointer before transition
   if (&data != &cachedStock)
     cachedStock = data;
   StockView::show(data, anim);
+
+  int32_t heapAfter = ESP.getFreeHeap();
+  Serial.printf("GUI: Show Stock (After Heap: %d, delta: %d)\n", heapAfter,
+                heapAfter - heapBefore);
 }
 
 // --- CONTROLLER LOGIC ---
@@ -239,55 +318,110 @@ void GuiController::updateTime() {
   }
 }
 
-void GuiController::handleGesture(lv_event_t *e) {
-  lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
-  // Serial.printf("DEBUG: Gesture Dir: %d, App: %d\n", dir, currentApp);
+static bool isDirUp(lv_dir_t dir) {
+  return dir == LV_DIR_TOP;
+}
+static bool isDirDown(lv_dir_t dir) {
+  return dir == LV_DIR_BOTTOM;
+}
+static bool isDirLeft(lv_dir_t dir) {
+  return dir == LV_DIR_LEFT;
+}
+static bool isDirRight(lv_dir_t dir) {
+  return dir == LV_DIR_RIGHT;
+}
 
-  // --- CIRCULAR NAVIGATION (Up/Down) ---
-  if (dir == LV_DIR_TOP) {
-    // UP: Weather -> Stocks -> Bus -> Weather
-    if (currentApp == APP_WEATHER) {
-      showStockScreen(cachedStock, LV_SCR_LOAD_ANIM_MOVE_TOP);
-    } else if (currentApp == APP_STOCK) {
-      showBusScreen(cachedBus, LV_SCR_LOAD_ANIM_MOVE_TOP);
-    } else if (currentApp == APP_BUS) {
-      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_TOP);
-    }
-  } else if (dir == LV_DIR_BOTTOM) {
-    // DOWN: Weather -> Bus -> Stocks -> Weather
-    if (currentApp == APP_WEATHER) {
-      showBusScreen(cachedBus, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
-    } else if (currentApp == APP_BUS) {
-      showStockScreen(cachedStock, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
-    } else if (currentApp == APP_STOCK) {
-      showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_MOVE_BOTTOM);
-    }
-  }
-  // --- INTERNAL VIEWS (Left/Right) ---
-  else if (dir == LV_DIR_LEFT) {
-    if (currentApp == APP_WEATHER) {
-      if (cityCount > 1) {
-        currentCityIndex = (currentCityIndex + 1) % cityCount;
-        cityChanged = true;
-      }
-    }
-    // Bus Swipe Removed
-  } else if (dir == LV_DIR_RIGHT) {
-    if (currentApp == APP_WEATHER) {
-      if (cityCount > 1) {
+void GuiController::handleSwipe(int16_t dx, int16_t dy) {
+  if (abs(dx) > abs(dy) && abs(dx) > 40) {
+    if (dx > 0) {
+      // right swipe → previous city
+      if (currentApp == APP_WEATHER && cityCount > 1) {
         currentCityIndex = (currentCityIndex - 1 + cityCount) % cityCount;
         cityChanged = true;
+        pendingCitySwipeAnim = -1; // new screen slides in from left
+      }
+    } else {
+      // left swipe → next city
+      if (currentApp == APP_WEATHER && cityCount > 1) {
+        currentCityIndex = (currentCityIndex + 1) % cityCount;
+        cityChanged = true;
+        pendingCitySwipeAnim = 1; // new screen slides in from right
       }
     }
-    // Bus Swipe Removed
+    return;
+  }
+
+  if (abs(dy) > abs(dx) && abs(dy) > 40) {
+    if (dy < 0) {
+      if (currentApp == APP_WEATHER) {
+        pendingScreenChange = SCREEN_STOCK; pendingScreenAnim = -2;
+      } else if (currentApp == APP_STOCK) {
+        pendingScreenChange = SCREEN_BUS;   pendingScreenAnim = -2;
+      } else if (currentApp == APP_BUS) {
+        pendingScreenChange = SCREEN_WEATHER; pendingScreenAnim = -2;
+      }
+    } else {
+      if (currentApp == APP_WEATHER) {
+        pendingScreenChange = SCREEN_BUS;     pendingScreenAnim = 2;
+      } else if (currentApp == APP_BUS) {
+        pendingScreenChange = SCREEN_STOCK;   pendingScreenAnim = 2;
+      } else if (currentApp == APP_STOCK) {
+        pendingScreenChange = SCREEN_WEATHER; pendingScreenAnim = 2;
+      }
+    }
+  }
+  lastGestureTime = millis();
+}
+
+uint32_t GuiController::getLastGestureTime() {
+  return lastGestureTime;
+}
+
+void GuiController::handleGesture(lv_event_t *e) {
+  static uint32_t lastGestureMs = 0;
+  uint32_t now = millis();
+  if (now - lastGestureMs < 300) {
+    return; // Debounce gesture nav to avoid rapid flick/bounce
+  }
+  lastGestureMs = now;
+
+  lv_indev_t *indev = lv_indev_get_act();
+  if (indev == NULL)
+    return;
+  lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+
+  Serial.printf("GESTURE: dir=%d, app=%d\n", dir, currentApp);
+  lastGestureTime = millis();
+
+  switch (dir) {
+  case LV_DIR_LEFT:
+    handleSwipe(-100, 0); // keep semantics for left/right touch
+    break;
+  case LV_DIR_RIGHT:
+    handleSwipe(100, 0);
+    break;
+  case LV_DIR_TOP:
+    handleSwipe(0, -100);
+    break;
+  case LV_DIR_BOTTOM:
+    handleSwipe(0, 100);
+    break;
+  default:
+    // no action for none
+    break;
   }
 }
 
 void GuiController::handleScreenClick(lv_event_t *e) {
-  // Fix: Ignore click if a gesture was detected
-  if (lv_indev_get_gesture_dir(lv_indev_get_act()) != LV_DIR_NONE) {
+  // Fix: Ignore click if a gesture was detected or just happened.
+  lv_indev_t *indev = lv_indev_get_act();
+  if (indev == NULL)
     return;
-  }
+  if (lv_indev_get_gesture_dir(indev) != LV_DIR_NONE)
+    return;
+
+  if (millis() - lastGestureTime < 500)
+    return; // Prevent a swipe from triggering a click
 
   // Debounce to prevent rapid clicks causing OOM
   static uint32_t lastClickTime = 0;
@@ -298,7 +432,8 @@ void GuiController::handleScreenClick(lv_event_t *e) {
 
   if (currentApp == APP_WEATHER) {
     forecastMode = (forecastMode + 1) % 3;
-    showWeatherScreen(cachedWeather, LV_SCR_LOAD_ANIM_FADE_ON);
+    pendingScreenChange = SCREEN_WEATHER;
+    pendingScreenAnim = 3; // fade transition for forecast mode cycle
   } else if (currentApp == APP_BUS) {
     // Switch Station on Tap
     if (busStopCount > 1) {

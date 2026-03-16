@@ -2,7 +2,7 @@
 #include <algorithm> // For sort
 
 // Helper to remove Latin chars for display compatibility
-String sanitize(String input) {
+static String sanitize(String input) {
   input.replace("á", "a");
   input.replace("à", "a");
   input.replace("Á", "A");
@@ -53,6 +53,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
 
   // Serial.println("Fetching Combined Bus Data: " + url);
   http.begin(client, url);
+  http.useHTTP10(true);
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
 
@@ -66,11 +67,18 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
       Serial.print(F("deserializeJson() failed: "));
       Serial.println(error.f_str());
       http.end();
+      client.stop();
       return false;
     }
 
     // Capture root timestamp for relative time calculation (ms)
     long long rootTimestamp = doc["timestamp"].as<long long>();
+    if (rootTimestamp == 0) {
+      Serial.println("BusService: missing root timestamp, discarding response");
+      http.end();
+      client.stop();
+      return false;
+    }
 
     JsonArray parades = doc["parades"];
     if (parades.size() == 0) {
@@ -78,6 +86,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
       data.arrivals.clear();
       data.stopCode = stopCode;
       http.end();
+      client.stop();
       return true; // Return TRUE so UI updates to show "No Buses"
     }
 
@@ -131,12 +140,14 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
               });
 
     http.end();
+    client.stop();
     // Serial.println("DEBUG: Bus Data Updated (Returning True)");
     return true;
   } else {
     Serial.print("Error code: ");
     Serial.println(httpResponseCode);
     http.end();
+    client.stop();
     return false;
   }
 }

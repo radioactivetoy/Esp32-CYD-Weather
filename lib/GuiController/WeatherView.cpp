@@ -5,7 +5,9 @@
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_16);
+LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(lv_font_montserrat_24);
+LV_FONT_DECLARE(lv_font_montserrat_32);
 
 // Helper for Month Names
 static const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -124,6 +126,10 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   // transitions. GuiController logic used lv_scr_load_anim(..., auto_del=true).
 
   lv_obj_t *new_scr = lv_obj_create(NULL);
+  if (!new_scr) {
+    Serial.println("WeatherView: Screen create failed (out of mem)");
+    return;
+  }
   lv_obj_clear_flag(new_scr, LV_OBJ_FLAG_SCROLLABLE);
 
   char buf[128];
@@ -155,7 +161,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_clear_flag(bg_grad, LV_OBJ_FLAG_SCROLLABLE);
 
   // Click & Gesture Handlers
-  lv_obj_add_flag(bg_grad, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(bg_grad, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
   lv_obj_add_event_cb(bg_grad, GuiController::handleScreenClick,
                       LV_EVENT_CLICKED, NULL);
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
@@ -194,34 +200,35 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_label_set_text(city_lbl, titleText.c_str());
 
   struct tm timeinfo;
+  lv_obj_t *time_lbl = lv_label_create(header_row);
   if (getLocalTime(&timeinfo, 10)) {
     char timeStr[16];
     strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-    lv_obj_t *time_lbl = lv_label_create(header_row);
     lv_label_set_text(time_lbl, timeStr);
-    lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xAAAAAA), 0);
-    lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20, 0);
-    lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
-    GuiController::setActiveTimeLabel(time_lbl);
-
-    // Status Dot
-    // Status Dot
-    lv_obj_t *dot = lv_obj_create(header_row);
-    lv_obj_set_size(dot, 10, 8); // Wider
-    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(dot, 0, 0);
-    lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
-    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-
-    uint32_t dotColor = 0x00AA00; // Dark Green (Fresh)
-    if (DataManager::isWeatherUpdating(GuiController::getCityIndex())) {
-      dotColor = 0xFFFF00; // Yellow (Refreshing)
-    } else if (data.lastUpdate == 0 ||
-               (millis() - data.lastUpdate > 900000)) { // 15 mins or Never
-      dotColor = 0xFF0000;                              // Red (Stale)
-    }
-    lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
+  } else {
+    lv_label_set_text(time_lbl, "--:--");
   }
+  lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20, 0);
+  lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
+  GuiController::setActiveTimeLabel(time_lbl);
+
+  // Status Dot
+  lv_obj_t *dot = lv_obj_create(header_row);
+  lv_obj_set_size(dot, 10, 8); // Wider
+  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_width(dot, 0, 0);
+  lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -7, 0);
+  lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+
+  uint32_t dotColor = 0x00AA00; // Dark Green (Fresh)
+  if (DataManager::isWeatherUpdating(GuiController::getCityIndex())) {
+    dotColor = 0xFFFF00; // Yellow (Refreshing)
+  } else if (data.lastUpdate == 0 ||
+             (millis() - data.lastUpdate > 900000)) {
+    dotColor = 0xFF0000; // Red (Stale)
+  }
+  lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
 
   if (forecastMode == 0) {
     // === CURRENT WEATHER ===
@@ -533,6 +540,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     anim_type = LV_SCR_LOAD_ANIM_MOVE_BOTTOM;
   else if (anim == -2)
     anim_type = LV_SCR_LOAD_ANIM_MOVE_TOP;
+  else if (anim == 3)
+    anim_type = LV_SCR_LOAD_ANIM_FADE_ON;
 
   int time = (anim == 0) ? 0 : 300;
   lv_scr_load_anim(new_scr, anim_type, time, 0, true);

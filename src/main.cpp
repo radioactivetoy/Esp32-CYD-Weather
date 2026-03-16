@@ -89,6 +89,8 @@ void setup() {
 }
 
 void loop() {
+  static bool weatherInitialized = false;
+
   // --- GUI UPDATE ---
   GuiController::update();
 
@@ -98,8 +100,11 @@ void loop() {
   // 1. Weather Update
   WeatherData wd;
   if (DataManager::getWeatherData(wd)) {
-    // If we are getting the first update, show it
-    GuiController::showWeatherScreen(wd, 0);
+    GuiController::updateWeatherCache(wd);
+    if (!weatherInitialized || GuiController::isWeatherScreenActive()) {
+      GuiController::requestRefresh();
+    }
+    weatherInitialized = true;
   }
 
   // 2. Bus Update
@@ -108,7 +113,7 @@ void loop() {
   if (DataManager::getBusData(bd)) {
     GuiController::updateBusCache(bd);
     if (GuiController::isBusScreenActive()) {
-      GuiController::showBusScreen(bd, 0);
+      GuiController::requestRefresh();
       busUpdated = true;
     }
   }
@@ -118,29 +123,18 @@ void loop() {
   if (DataManager::getStockData(sd)) {
     GuiController::updateStockCache(sd);
     if (GuiController::isStockScreenActive()) {
-      GuiController::showStockScreen(sd, 0);
+      GuiController::requestRefresh();
     }
   }
 
   // 4. Status Change Updates (Repaint for Yellow Dot)
   if (!busUpdated && DataManager::getBusStatusChanged() &&
       GuiController::isBusScreenActive()) {
-    // Refresh with current cache (don't consume new data flag if not set)
-    GuiController::showBusScreen(DataManager::getCurrentBusData(), 0);
+    GuiController::requestRefresh();
   }
-  if (DataManager::getWeatherStatusChanged()) {
-    // We stick to the currently displayed city index in GuiController logic
-    // But WeatherView needs to know which one. GuiController handles the
-    // mapping. Simplifying: Just refresh if active. Note: Checking specific
-    // screen activation is complex for Weather (Forecast vs Current) For now,
-    // just call update logic? No, update() doesn't redraw. Let's leave Weather
-    // for now if user didn't explicitly complain, but good to add. Actually,
-    // `showWeatherScreen` takes WeatherData. We need to know IF weather screen
-    // is active. GuiController doesn't expose `isWeatherScreenActive` clearly
-    // (it has AppMode).
-    if (GuiController::currentApp == GuiController::APP_WEATHER) {
-      GuiController::showWeatherScreen(DataManager::getCurrentWeatherData(), 0);
-    }
+  if (DataManager::getWeatherStatusChanged() &&
+      GuiController::isWeatherScreenActive()) {
+    GuiController::requestRefresh();
   }
 
   // --- APP STATE TRIGGERS ---

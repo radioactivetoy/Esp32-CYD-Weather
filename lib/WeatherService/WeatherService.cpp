@@ -70,25 +70,10 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
                         // JsonDocument is ArduinoJson 7
       DeserializationError error = deserializeJson(doc, http.getStream());
 
-      if (error) { // ... existing error handle
+      if (error) {
         Serial.print("Deserialize Open-Meteo failed: ");
         Serial.println(error.c_str());
       } else {
-        weatherSuccess =
-            false; // logic flow is a bit weird in original, let's just parse
-                   // Original parsing logic for OpenMeteo...
-                   // Keeping existing parsing logic but wrapping it
-
-        // ... (Assuming original parsing code blocks follow, I'll just change
-        // the top part to allow fallback) Actually, I should just replace the
-        // top block.
-      }
-
-      if (error) {
-        Serial.print("Deserialize JSON failed: ");
-        Serial.println(error.c_str());
-      } else {
-        // ... (parsing logic remains same)
         weatherSuccess = true;
         JsonObject current = doc["current"];
         data.currentTemp = current["temperature_2m"];
@@ -125,9 +110,11 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
 
         JsonArray h_time = doc["hourly"]["time"];
         struct tm timeinfo;
-        int startIdx = 0;
+        // past_days=1 in the URL prepends 24 hours of yesterday; today starts
+        // at index 24. Add the current hour to skip already-past slots.
+        int startIdx = 24;
         if (getLocalTime(&timeinfo))
-          startIdx = timeinfo.tm_hour;
+          startIdx = 24 + timeinfo.tm_hour;
 
         for (int i = 0; i < 24; i++) {
           int idx = startIdx + i;
@@ -140,6 +127,7 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
       }
     }
     http.end();
+    client.stop();
   }
 
   if (!weatherSuccess)
@@ -177,6 +165,7 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
       Serial.printf("AQI HTTP Error: %d\n", aqiRes);
     }
     http.end();
+    client.stop();
   }
 
   // 3. Hybrid: Overwrite Current Weather with OpenWeatherMap if Key is present
@@ -225,12 +214,13 @@ bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
 
   Serial.println("Geocoding city OWM: " + url);
   http.begin(client, url);
+  http.useHTTP10(true);
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
 
   int httpResponseCode = http.GET();
   if (httpResponseCode > 0) {
-    JsonDocument doc;
+    StaticJsonDocument<4096> doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
 
     // Expecting an Array [ { "name": ... } ]
@@ -244,16 +234,19 @@ bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
                     lon, resolvedName.c_str());
 
       http.end();
+      client.stop();
       return true;
     }
 
     Serial.print("Geocoding failed/parsed error: ");
     Serial.println(error.c_str());
     http.end();
+    client.stop();
     return false;
   }
   Serial.printf("Geocoding HTTP Error: %d\n", httpResponseCode);
   http.end();
+  client.stop();
   return false;
 }
 
@@ -422,6 +415,7 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
 
         Serial.println("OWM Forecast 5Day Success");
         http.end();
+        client.stop();
         return true;
       }
     } else {
@@ -432,6 +426,7 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
     Serial.printf("OWM Forecast HTTP Error: %d\n", code);
   }
   http.end();
+  client.stop();
   return false;
 }
 
@@ -446,8 +441,7 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
       "&lon=" + String(lon) + "&appid=" + apiKey + "&units=metric";
 
   Serial.println("Fetching OWM Current: " + url);
-  http.begin(client, url);
-  http.setConnectTimeout(5000);
+  http.begin(client, url);  http.useHTTP10(true);  http.setConnectTimeout(5000);
   http.setTimeout(5000);
 
   int code = http.GET();
@@ -493,6 +487,7 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
         Serial.printf("OWM Update Success: Temp=%.1f Icon=%s WMO=%d\n",
                       data.currentTemp, icon.c_str(), wmo);
         http.end();
+        client.stop();
         return true;
       }
     } else {
@@ -503,5 +498,6 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
     Serial.printf("OWM HTTP Error: %d\n", code);
   }
   http.end();
+  client.stop();
   return false;
 }

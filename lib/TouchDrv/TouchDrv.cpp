@@ -68,38 +68,59 @@ bool TouchDrv::read(int16_t *x, int16_t *y) {
     // Serial.printf("TOUCH: Reg 0x02 (FingerNum) = %d\n", fingerNum);
   }
 
-  // Always read coordinates for debug
-  uint8_t data[4];
-  i2c_read_continuous(0x03, data, 4);
-
-  uint16_t _x = ((data[0] & 0x0f) << 8) | data[1];
-  uint16_t _y = ((data[2] & 0x0f) << 8) | data[3];
-
-  // Return if no finger
-  if (fingerNum == 0) {
-    // Serial.print("."); // Alive tick
-    return false;
-  }
   if (fingerNum == 255) {
     Serial.print("!"); // I2C Fail
     return false;
   }
 
-  // Serial.printf("TOUCH RAW: num=%d, raw_x=%d, raw_y=%d\n", fingerNum, _x,
-  // _y);
+  if (fingerNum == 0) {
+    if (touchActive) {
+      int16_t dx = lastX - swipeStartX;
+      int16_t dy = lastY - swipeStartY;
+      int16_t adx = abs(dx);
+      int16_t ady = abs(dy);
 
-  // Invert/Map logic for 240x320
-  // User reported reverse scroll. Adjusting mapping.
-  // Try passing raw Y (or inverted X depending on orientation)
-  // Assuming portrait:
-  // Debug: Print raw and mapped coordinates
-  // Serial.printf("TOUCH DEBUG: Raw X=%d Y=%d -> Mapped X=%d Y=%d\n", _x, _y,
-  // _x, _y); Just print mapped for now to see what LVGL gets
+      const int16_t swipeMin = 35;
+      if (adx > swipeMin || ady > swipeMin) {
+        if (adx > ady * 1.2f) {
+          pendingSwipe = (dx > 0) ? SwipeDirection::Right : SwipeDirection::Left;
+        } else if (ady > adx * 1.2f) {
+          pendingSwipe = (dy > 0) ? SwipeDirection::Down : SwipeDirection::Up;
+        }
+      }
+      touchActive = false;
+      swipeStartX = swipeStartY = -1;
+      lastX = lastY = -1;
+    }
+    return false;
+  }
 
-  *x = _x;
-  *y = _y;
+  // Finger is present — read coordinates; bail if I2C fails
+  uint8_t data[4] = {0};
+  if (!i2c_read_continuous(0x03, data, 4))
+    return false;
 
+  int16_t mappedX = ((data[0] & 0x0f) << 8) | data[1];
+  int16_t mappedY = ((data[2] & 0x0f) << 8) | data[3];
+
+  // Accept high-speed swipes with large jumps; we use the manual swipe detector.
+  if (!touchActive) {
+    touchActive = true;
+    swipeStartX = mappedX;
+    swipeStartY = mappedY;
+  }
+  lastX = mappedX;
+  lastY = mappedY;
+
+  *x = mappedX;
+  *y = mappedY;
   return true;
+}
+
+TouchDrv::SwipeDirection TouchDrv::consumeSwipe() {
+  SwipeDirection result = pendingSwipe;
+  pendingSwipe = SwipeDirection::None;
+  return result;
 }
 
 uint8_t TouchDrv::i2c_read(uint8_t addr) {
@@ -122,18 +143,24 @@ uint8_t TouchDrv::i2c_read(uint8_t addr) {
   return rdData;
 }
 
-uint8_t TouchDrv::i2c_read_continuous(uint8_t addr, uint8_t *data,
-                                      uint32_t length) {
+bool TouchDrv::i2c_read_continuous(uint8_t addr, uint8_t *data,
+                                   uint32_t length) {
   Wire.beginTransmission(I2C_ADDR_CST820);
   Wire.write(addr);
   if (Wire.endTransmission(true))
-    return -1;
+    return false;
 
-  Wire.requestFrom(I2C_ADDR_CST820, (size_t)length);
-  for (int i = 0; i < length; i++) {
+  uint8_t received = Wire.requestFrom(I2C_ADDR_CST820, (size_t)length);
+  if (received < length) {
+    while (Wire.available())
+      Wire.read(); // flush partial data
+    memset(data, 0, length);
+    return false;
+  }
+  for (uint32_t i = 0; i < length; i++) {
     *data++ = Wire.read();
   }
-  return 0;
+  return true;
 }
 
 void TouchDrv::i2c_write(uint8_t addr, uint8_t data) {

@@ -2,6 +2,7 @@
 #define DATA_MANAGER_H
 
 #include <Arduino.h>
+#include <atomic>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <vector>
@@ -66,23 +67,23 @@ private:
   static BusData busData;
   static std::vector<StockItem> stockData;
 
-  // Update Flags (Volatile for ISR/Thread safety)
-  static volatile bool weatherDataUpdated;
-  static volatile bool busDataUpdated;
-  static volatile bool stockDataUpdated;
+  // Update Flags (atomic for correct dual-core memory ordering on ESP32)
+  static std::atomic<bool> weatherDataUpdated;
+  static std::atomic<bool> busDataUpdated;
+  static std::atomic<bool> stockDataUpdated;
   // static volatile bool isUpdatingWeather; // Replaced by index check
   // static volatile bool isUpdatingBus;     // Replaced by index check
-  static volatile int currentUpdatingCityIndex;
-  static volatile int currentUpdatingBusIndex;
-  static volatile bool isUpdatingStock;
-  static volatile uint32_t stockLastUpdateTime;
+  static std::atomic<int> currentUpdatingCityIndex;
+  static std::atomic<int> currentUpdatingBusIndex;
+  static std::atomic<bool> isUpdatingStock;
+  static std::atomic<uint32_t> stockLastUpdateTime;
 
-  static volatile bool weatherStatusChanged;
-  static volatile bool busStatusChanged;
+  static std::atomic<bool> weatherStatusChanged;
+  static std::atomic<bool> busStatusChanged;
 
-  static volatile bool manualBusTrigger;
-  static volatile bool manualWeatherTrigger;
-  static volatile bool manualStockTrigger;
+  static std::atomic<bool> manualBusTrigger;
+  static std::atomic<bool> manualWeatherTrigger;
+  static std::atomic<bool> manualStockTrigger;
 
   // Caches
   static std::vector<CityWeatherCache> cityCaches;

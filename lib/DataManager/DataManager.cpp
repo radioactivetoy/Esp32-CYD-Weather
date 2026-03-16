@@ -4,6 +4,18 @@
 #include "NetworkManager.h"
 #include <esp_task_wdt.h> // Hardware Watchdog
 
+// Watchdog helpers
+static const uint32_t DATA_MANAGER_WDT_RESET_MS = 30000;
+static uint32_t dataManagerLastWdtReset = 0;
+static void dataManagerFeedWdt() {
+  uint32_t now = millis();
+  if (now - dataManagerLastWdtReset >= DATA_MANAGER_WDT_RESET_MS) {
+    esp_task_wdt_reset();
+    dataManagerLastWdtReset = now;
+    Serial.printf("WATCHDOG: DataManager wdt reset at %u\n", now);
+  }
+}
+
 // Defines
 SemaphoreHandle_t DataManager::dataMutex = NULL;
 
@@ -11,21 +23,21 @@ WeatherData DataManager::weatherData;
 BusData DataManager::busData;
 std::vector<StockItem> DataManager::stockData;
 
-volatile bool DataManager::weatherDataUpdated = false;
-volatile bool DataManager::busDataUpdated = false;
-volatile bool DataManager::stockDataUpdated = false;
+std::atomic<bool> DataManager::weatherDataUpdated{false};
+std::atomic<bool> DataManager::busDataUpdated{false};
+std::atomic<bool> DataManager::stockDataUpdated{false};
 
-volatile int DataManager::currentUpdatingCityIndex = -1;
-volatile int DataManager::currentUpdatingBusIndex = -1;
-volatile bool DataManager::isUpdatingStock = false;
-volatile uint32_t DataManager::stockLastUpdateTime = 0;
+std::atomic<int> DataManager::currentUpdatingCityIndex{-1};
+std::atomic<int> DataManager::currentUpdatingBusIndex{-1};
+std::atomic<bool> DataManager::isUpdatingStock{false};
+std::atomic<uint32_t> DataManager::stockLastUpdateTime{0};
 
-volatile bool DataManager::weatherStatusChanged = false;
-volatile bool DataManager::busStatusChanged = false;
+std::atomic<bool> DataManager::weatherStatusChanged{false};
+std::atomic<bool> DataManager::busStatusChanged{false};
 
-volatile bool DataManager::manualBusTrigger = false;
-volatile bool DataManager::manualWeatherTrigger = false;
-volatile bool DataManager::manualStockTrigger = true;
+std::atomic<bool> DataManager::manualBusTrigger{false};
+std::atomic<bool> DataManager::manualWeatherTrigger{false};
+std::atomic<bool> DataManager::manualStockTrigger{true};
 
 bool DataManager::isWeatherUpdating(int cityIndex) {
   return currentUpdatingCityIndex == cityIndex;
@@ -250,6 +262,15 @@ void DataManager::networkTask(void *parameter) {
   for (;;) {
     uint32_t now = millis();
 
+    dataManagerFeedWdt();
+
+    if (ESP.getFreeHeap() < 65000) {
+      Serial.printf("NETWORK: low heap %d, delaying updates\n", ESP.getFreeHeap());
+      NetworkManager::handleClient();
+      vTaskDelay(pdMS_TO_TICKS(250));
+      continue;
+    }
+
     // Rate Limiting Check (Min 1s between requests)
     bool safeToRequest = (now - lastNetworkRequestMs > 1000);
 
@@ -267,8 +288,10 @@ void DataManager::networkTask(void *parameter) {
     if ((manualWeatherTrigger || (citySwitched && targetCityIndex >= 0)) &&
         safeToRequest) {
       // If switched, only update if stale (> 10 mins) or no data
-      if (manualWeatherTrigger || !cityCaches[targetCityIndex].hasData ||
-          (now - cityCaches[targetCityIndex].lastUpdate > 600000)) {
+      if (manualWeatherTrigger ||
+          (targetCityIndex >= 0 && targetCityIndex < (int)cityCaches.size() &&
+           (!cityCaches[targetCityIndex].hasData ||
+            now - cityCaches[targetCityIndex].lastUpdate > 600000))) {
         cityToUpdate = targetCityIndex;
       }
       manualWeatherTrigger = false;
@@ -289,6 +312,7 @@ void DataManager::networkTask(void *parameter) {
     // Execute Update
     if (cityToUpdate >= 0 && cityToUpdate < (int)cityCaches.size()) {
       if (safeToRequest) {
+        dataManagerFeedWdt();
         Serial.printf("NETWORK: Updating City %d: %s\n", cityToUpdate,
                       cityCaches[cityToUpdate].cityName.c_str());
         lastNetworkRequestMs = now; // Update timestamp
@@ -351,7 +375,8 @@ void DataManager::networkTask(void *parameter) {
     // If we just switched to a cached city (and didn't need update), load
     // from cache
     if (citySwitched && cityToUpdate != targetCityIndex &&
-        targetCityIndex >= 0 && cityCaches[targetCityIndex].hasData) {
+        targetCityIndex >= 0 && targetCityIndex < (int)cityCaches.size() &&
+        cityCaches[targetCityIndex].hasData) {
       xSemaphoreTake(dataMutex, portMAX_DELAY);
       weatherData = cityCaches[targetCityIndex].data;
       weatherDataUpdated = true;
@@ -360,6 +385,20 @@ void DataManager::networkTask(void *parameter) {
       if (targetCityIndex == 0) {
         LedController::update(weatherData);
       }
+      xSemaphoreGive(dataMutex);
+    }
+
+    // Optimistic city name update: when switching to a city with no cached
+    // data yet, immediately push the new name so the header updates right away
+    // instead of waiting for the full network fetch to complete.
+    // lastUpdate=0 ensures the dot shows as loading until real data arrives.
+    if (citySwitched && targetCityIndex >= 0 &&
+        targetCityIndex < (int)cityCaches.size() &&
+        !cityCaches[targetCityIndex].hasData) {
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      weatherData.cityName = cityCaches[targetCityIndex].cityName;
+      weatherData.lastUpdate = 0;
+      weatherDataUpdated = true;
       xSemaphoreGive(dataMutex);
     }
 
@@ -375,10 +414,11 @@ void DataManager::networkTask(void *parameter) {
     if ((manualBusTrigger || (stationChanged && targetBusIndex >= 0)) &&
         safeToRequest) {
       if (manualBusTrigger ||
-          busCaches[targetBusIndex].data.stopCode.isEmpty() ||
-          (now - busCaches[targetBusIndex].lastUpdate > 60000)) {
+          (targetBusIndex >= 0 && targetBusIndex < (int)busCaches.size() &&
+           (busCaches[targetBusIndex].data.stopCode.isEmpty() ||
+            now - busCaches[targetBusIndex].lastUpdate > 60000))) {
         busToUpdate = targetBusIndex;
-      } else {
+      } else if (targetBusIndex >= 0 && targetBusIndex < (int)busCaches.size()) {
         // Cache Hit
         xSemaphoreTake(dataMutex, portMAX_DELAY);
         busData = busCaches[targetBusIndex].data;
@@ -403,6 +443,7 @@ void DataManager::networkTask(void *parameter) {
     // Execute Update
     if (busToUpdate >= 0 && busToUpdate < (int)busCaches.size()) {
       if (safeToRequest) {
+        dataManagerFeedWdt();
         String stopId = busCaches[busToUpdate].id;
         Serial.printf("NETWORK: Updating Bus Stop %s...\n", stopId.c_str());
         lastNetworkRequestMs = now;
@@ -448,6 +489,7 @@ void DataManager::networkTask(void *parameter) {
     // ---------------- STOCK ----------------
     if ((now - lastStockUpdate > 300000 || manualStockTrigger) &&
         safeToRequest) {
+      dataManagerFeedWdt();
       manualStockTrigger = false;
       String syms = NetworkManager::getStockSymbols();
       if (syms.length() > 0) {
@@ -456,6 +498,7 @@ void DataManager::networkTask(void *parameter) {
 
         isUpdatingStock = true;
         std::vector<StockItem> items = StockService::getQuotes(syms);
+        dataManagerFeedWdt();
         isUpdatingStock = false;
 
         if (!items.empty()) {

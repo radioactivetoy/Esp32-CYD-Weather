@@ -6,8 +6,6 @@
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_16);
-LV_FONT_DECLARE(lv_font_montserrat_14);
-LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(lv_font_montserrat_24);
 
@@ -15,6 +13,10 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   GuiController::currentApp = GuiController::APP_STOCK;
 
   lv_obj_t *new_scr = lv_obj_create(NULL);
+  if (!new_scr) {
+    Serial.println("StockView: Screen create failed (out of mem)");
+    return;
+  }
 
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
                       NULL);
@@ -43,35 +45,37 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
 
   // Time
   struct tm timeinfo;
+  lv_obj_t *time_lb = lv_label_create(header);
   if (getLocalTime(&timeinfo, 10)) {
     char timeStr[32];
     strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-    lv_obj_t *time_lb = lv_label_create(header);
     lv_label_set_text(time_lb, timeStr);
-    lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0);
-    lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20,
-                               0); // Upgrade 14->20
-    lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
-    GuiController::setActiveTimeLabel(time_lb);
-
-    // Status Dot
-    lv_obj_t *dot = lv_obj_create(header);
-    lv_obj_set_size(dot, 10, 8); // Wider
-    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(dot, 0, 0);
-    lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
-    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-
-    uint32_t dotColor = 0x00AA00; // Dark Green
-    uint32_t lastUpdate = DataManager::getStockLastUpdate();
-    if (DataManager::isStockUpdating()) {
-      dotColor = 0xFFFF00; // Yellow
-    } else if (lastUpdate == 0 ||
-               (millis() - lastUpdate > 300000)) { // 5m Stale
-      dotColor = 0xFF0000;                         // Red
-    }
-    lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
+  } else {
+    lv_label_set_text(time_lb, "--:--");
   }
+  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20,
+                             0); // Upgrade 14->20
+  lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
+  GuiController::setActiveTimeLabel(time_lb);
+
+  // Status Dot
+  lv_obj_t *dot = lv_obj_create(header);
+  lv_obj_set_size(dot, 10, 8); // Wider
+  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_width(dot, 0, 0);
+  lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
+  lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+
+  uint32_t dotColor = 0x00AA00; // Dark Green
+  uint32_t lastUpdate = DataManager::getStockLastUpdate();
+  if (DataManager::isStockUpdating()) {
+    dotColor = 0xFFFF00; // Yellow
+  } else if (lastUpdate == 0 ||
+             (millis() - lastUpdate > 300000)) { // 5m Stale
+    dotColor = 0xFF0000;                         // Red
+  }
+  lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
 
   // List
   lv_obj_t *list = lv_obj_create(new_scr);
