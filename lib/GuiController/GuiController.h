@@ -63,8 +63,11 @@ public:
   // Public Callbacks for Views
   static void handleGesture(lv_event_t *e);
   static void handleScreenClick(lv_event_t *e);
+  static void handleLongPress(lv_event_t *e);
   static void handleSwipe(int16_t dx, int16_t dy);
   static uint32_t getLastGestureTime();
+
+  static std::atomic<bool> longPressTriggered; // polled by main.cpp
 
 private:
   static String pendingMsg;

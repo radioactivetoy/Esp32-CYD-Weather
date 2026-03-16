@@ -18,6 +18,7 @@ struct HourlyForecast {
   float temp;
   int weatherCode;
   float pop; // Probability of Precipitation (0..1)
+  float precipitation; // mm
 };
 
 struct WeatherData {
@@ -31,8 +32,11 @@ struct WeatherData {
   int currentAQI;
   float windSpeed;
   int windDirection;
-  float currentRainProb; // New
-  bool isNight;          // New: For icon selection
+  float currentRainProb;
+  bool isNight;
+  float currentUVIndex;  // UV index (0-11+)
+  String sunrise;        // "HH:MM" local time
+  String sunset;         // "HH:MM" local time
   uint32_t lastUpdate;   // Timestamp of last successful update
   DailyForecast daily[7];
   HourlyForecast hourly[24];
@@ -51,4 +55,5 @@ private:
                                       String apiKey);
   static bool updateForecastOWM_5Day(WeatherData &data, float lat, float lon,
                                      String apiKey);
+  static void fetchSupplementOpenMeteo(WeatherData &data, float lat, float lon);
 };

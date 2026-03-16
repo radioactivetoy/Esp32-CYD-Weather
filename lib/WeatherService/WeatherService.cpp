@@ -50,12 +50,13 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
     String url =
         "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat) +
         "&longitude=" + String(lon) +
-        "&current=temperature_2m,relative_humidity_2m,apparent_"
-        "temperature,"
+        "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
         "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day" +
-        "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
-        "&hourly=temperature_2m,weather_code&timezone=auto&past_days="
-        "1"; // Added past_days=1
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
+        "uv_index_max,sunrise,sunset" +
+        "&hourly=temperature_2m,weather_code,precipitation_probability,"
+        "precipitation" +
+        "&timezone=auto&past_days=1";
 
     Serial.println("Fetching Open-Meteo: " + url);
     http.begin(client, url); // Pass client
@@ -108,6 +109,13 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
         }
         data.currentMoonPhase = data.daily[0].moonPhaseIndex;
 
+        // UV index and sunrise/sunset — index 1 = today (index 0 = yesterday due to past_days=1)
+        data.currentUVIndex = doc["daily"]["uv_index_max"][1] | 0.0f;
+        String srStr = doc["daily"]["sunrise"][1] | String("");
+        String ssStr = doc["daily"]["sunset"][1] | String("");
+        data.sunrise = srStr.length() >= 16 ? srStr.substring(11, 16) : "";
+        data.sunset  = ssStr.length() >= 16 ? ssStr.substring(11, 16) : "";
+
         JsonArray h_time = doc["hourly"]["time"];
         struct tm timeinfo;
         // past_days=1 in the URL prepends 24 hours of yesterday; today starts
@@ -123,6 +131,8 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
           data.hourly[i].time = h_time[idx].template as<String>();
           data.hourly[i].temp = doc["hourly"]["temperature_2m"][idx];
           data.hourly[i].weatherCode = doc["hourly"]["weather_code"][idx];
+          data.hourly[i].pop = (doc["hourly"]["precipitation_probability"][idx] | 0) / 100.0f;
+          data.hourly[i].precipitation = doc["hourly"]["precipitation"][idx] | 0.0f;
         }
       }
     }
@@ -153,7 +163,7 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
       DeserializationError error = deserializeJson(doc, http.getStream());
       if (!error) {
         // "list": [{ "main": { "aqi": 1 }, ... }]
-        if (doc.containsKey("list")) {
+        if (doc["list"].is<JsonArray>()) {
           // OWM: 1 (Good), 2 (Fair), 3 (Moderate), 4 (Poor), 5 (Very Poor)
           data.currentAQI = doc["list"][0]["main"]["aqi"];
         }
@@ -168,7 +178,13 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
     client.stop();
   }
 
-  // 3. Hybrid: Overwrite Current Weather with OpenWeatherMap if Key is present
+  // 3. Supplement: fetch UV + sunrise/sunset from Open-Meteo when OWM was
+  // used as primary (Open-Meteo fallback already includes them in the same call)
+  if (forecastSuccess) {
+    fetchSupplementOpenMeteo(data, lat, lon);
+  }
+
+  // 4. Hybrid: Overwrite Current Weather with OpenWeatherMap if Key is present
   if (weatherSuccess && owmApiKey.length() > 0) {
     updateCurrentWeatherOWM(data, lat, lon, owmApiKey);
   }
@@ -220,7 +236,7 @@ bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
 
   int httpResponseCode = http.GET();
   if (httpResponseCode > 0) {
-    StaticJsonDocument<4096> doc;
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
 
     // Expecting an Array [ { "name": ... } ]
@@ -449,7 +465,7 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (!error) {
-      if (doc.containsKey("main")) {
+      if (doc["main"].is<JsonObject>()) {
         // Overwrite Data
         data.currentTemp = doc["main"]["temp"];
         data.currentHumidity = doc["main"]["humidity"];
@@ -500,4 +516,47 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
   http.end();
   client.stop();
   return false;
+}
+
+void WeatherService::fetchSupplementOpenMeteo(WeatherData &data, float lat,
+                                              float lon) {
+  if (WiFi.status() != WL_CONNECTED)
+    return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  String url =
+      "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat, 4) +
+      "&longitude=" + String(lon, 4) +
+      "&daily=uv_index_max,sunrise,sunset,temperature_2m_max,temperature_2m_min"
+      "&timezone=auto&forecast_days=1";
+
+  Serial.println("Fetching Open-Meteo supplement (UV/sunrise): " + url);
+  http.begin(client, url);
+  http.useHTTP10(true);
+  http.setConnectTimeout(5000);
+  http.setTimeout(5000);
+
+  if (http.GET() > 0) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, http.getStream())) {
+      data.currentUVIndex = doc["daily"]["uv_index_max"][0] | 0.0f;
+      String sr = doc["daily"]["sunrise"][0] | String("");
+      String ss = doc["daily"]["sunset"][0] | String("");
+      data.sunrise = sr.length() >= 16 ? sr.substring(11, 16) : "";
+      data.sunset  = ss.length() >= 16 ? ss.substring(11, 16) : "";
+      // Overwrite H/L with true full-day values from Open-Meteo daily endpoint
+      float hlMax = doc["daily"]["temperature_2m_max"][0] | data.daily[0].maxTemp;
+      float hlMin = doc["daily"]["temperature_2m_min"][0] | data.daily[0].minTemp;
+      data.daily[0].maxTemp = hlMax;
+      data.daily[0].minTemp = hlMin;
+      Serial.printf("Supplement: UV=%.1f Rise=%s Set=%s H=%.1f L=%.1f\n",
+                    data.currentUVIndex, data.sunrise.c_str(),
+                    data.sunset.c_str(), hlMax, hlMin);
+    }
+  }
+  http.end();
+  client.stop();
 }

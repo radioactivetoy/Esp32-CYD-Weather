@@ -137,6 +137,16 @@ void loop() {
     GuiController::requestRefresh();
   }
 
+  // --- LONG PRESS: Manual Refresh ---
+  if (GuiController::longPressTriggered.exchange(false)) {
+    if (GuiController::isWeatherScreenActive())
+      DataManager::triggerWeatherUpdate();
+    else if (GuiController::isBusScreenActive())
+      DataManager::triggerBusUpdate();
+    else if (GuiController::isStockScreenActive())
+      DataManager::triggerStockUpdate();
+  }
+
   // --- APP STATE TRIGGERS ---
 
   // Detect App Switching (Force Update on Entry)

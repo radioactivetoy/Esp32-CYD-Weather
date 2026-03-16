@@ -257,12 +257,39 @@ void DataManager::networkTask(void *parameter) {
 
   uint32_t lastStockUpdate = 0;
   uint32_t lastNetworkRequestMs = 0; // Rate Limiter
+  uint32_t lastNtpSync = 0;          // NTP re-sync every 6 hours
 
   // --- MAIN LOOP ---
   for (;;) {
     uint32_t now = millis();
 
     dataManagerFeedWdt();
+
+    // --- WiFi Reconnect ---
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("NETWORK: WiFi lost — reconnecting...");
+      WiFi.reconnect();
+      for (int i = 0; i < 30 && WiFi.status() != WL_CONNECTED; i++) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        dataManagerFeedWdt();
+      }
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("NETWORK: WiFi reconnected.");
+      } else {
+        Serial.println("NETWORK: Reconnect failed, retrying next cycle.");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        continue;
+      }
+    }
+
+    // --- NTP Re-sync (every 6 hours) ---
+    if (now - lastNtpSync > 21600000UL) {
+      configTime(0, 0, "pool.ntp.org");
+      setenv("TZ", NetworkManager::getTimezone().c_str(), 1);
+      tzset();
+      lastNtpSync = now;
+      Serial.println("NETWORK: NTP re-synced.");
+    }
 
     if (ESP.getFreeHeap() < 65000) {
       Serial.printf("NETWORK: low heap %d, delaying updates\n", ESP.getFreeHeap());

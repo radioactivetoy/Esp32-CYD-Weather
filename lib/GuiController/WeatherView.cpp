@@ -164,6 +164,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_add_flag(bg_grad, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
   lv_obj_add_event_cb(bg_grad, GuiController::handleScreenClick,
                       LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(bg_grad, GuiController::handleLongPress,
+                      LV_EVENT_LONG_PRESSED, NULL);
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
                       NULL);
 
@@ -186,7 +188,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_t *city_lbl = lv_label_create(header_row);
   lv_obj_set_width(city_lbl, 160); // Reduced to 160 as per user request
   lv_label_set_long_mode(city_lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
-  lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
+  lv_obj_set_style_text_color(city_lbl, lv_color_hex(0xFFFFFF), 0);
   lv_obj_set_style_text_font(city_lbl, &lv_font_montserrat_20, 0);
   lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
@@ -197,6 +199,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     titleText += " - Hourly";
   else if (forecastMode == 2)
     titleText += " - 7 Days";
+  else if (forecastMode == 3)
+    titleText += " - Chart";
   lv_label_set_text(city_lbl, titleText.c_str());
 
   struct tm timeinfo;
@@ -208,7 +212,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else {
     lv_label_set_text(time_lbl, "--:--");
   }
-  lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xDDDDDD), 0);
   lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20, 0);
   lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
   GuiController::setActiveTimeLabel(time_lbl);
@@ -235,15 +239,15 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
     // Glass Card
     lv_obj_t *glass_card = lv_obj_create(bg_grad);
-    lv_obj_set_size(glass_card, 180, 155); // Reduced 165->155
+    lv_obj_set_size(glass_card, 180, 175); // Expanded for feels like + sunrise/sunset
     lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
                  38); // Align below header (moved up 45->38)
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(glass_card, LV_OPA_70, 0);
+    lv_obj_set_style_bg_opa(glass_card, LV_OPA_60, 0);
     lv_obj_set_style_radius(glass_card, 15, 0);
     lv_obj_set_style_border_width(glass_card, 2, 0); // Increased 1->2
     lv_obj_set_style_border_color(glass_card, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_opa(glass_card, LV_OPA_50, 0);
+    lv_obj_set_style_border_opa(glass_card, LV_OPA_70, 0);
     lv_obj_set_flex_flow(glass_card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(glass_card, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -299,18 +303,17 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_label_set_text(arrow_r, LV_SYMBOL_DOWN);
       lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x5555FF), 0);
     } else {
-      lv_label_set_text(arrow_r, "-");
-      lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x888888), 0);
+      lv_label_set_text(arrow_r, "=");
+      lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x00CC00), 0);
     }
 
-    // H/L
+    // H/L/F (combined single line)
     lv_obj_t *hl_lbl = lv_label_create(glass_card);
-    snprintf(buf, sizeof(buf), "H:%.0f° L:%.0f°", data.daily[0].maxTemp,
-             data.daily[0].minTemp);
-    lv_label_set_text(hl_lbl, buf); // Restored!
-    lv_obj_set_style_text_font(hl_lbl, &lv_font_montserrat_16,
-                               0); // Upgrade H/L 14->16
-    lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xCCCCCC), 0);
+    snprintf(buf, sizeof(buf), "H:%.0f\xC2\xB0 L:%.0f\xC2\xB0  F:%.0f\xC2\xB0",
+             data.daily[0].maxTemp, data.daily[0].minTemp, data.currentFeelsLike);
+    lv_label_set_text(hl_lbl, buf);
+    lv_obj_set_style_text_font(hl_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xEEEEEE), 0);
     lv_obj_set_style_pad_top(hl_lbl, 0, 0);
 
     // Desc
@@ -326,7 +329,6 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_pad_top(desc_row, 2, 0);
     lv_obj_clear_flag(desc_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    // Weather Description
     lv_obj_t *desc_lbl = lv_label_create(desc_row);
     lv_label_set_text(desc_lbl, getWeatherDesc(data.currentWeatherCode));
     lv_obj_set_style_text_color(desc_lbl, lv_color_hex(0xFFD700), 0);
@@ -342,6 +344,19 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_text_color(rain_appended, lv_color_hex(0x00BFFF),
                                   0); // Blue
       lv_obj_set_style_text_font(rain_appended, &lv_font_montserrat_16, 0);
+    }
+
+
+    // Sunrise / Sunset
+    if (data.sunrise.length() > 0 && data.sunset.length() > 0) {
+      lv_obj_t *sun_lbl = lv_label_create(glass_card);
+      char sunBuf[32];
+      snprintf(sunBuf, sizeof(sunBuf), LV_SYMBOL_UP " %s  " LV_SYMBOL_DOWN " %s",
+               data.sunrise.c_str(), data.sunset.c_str());
+      lv_label_set_text(sun_lbl, sunBuf);
+      lv_obj_set_style_text_font(sun_lbl, &lv_font_montserrat_16, 0);
+      lv_obj_set_style_text_color(sun_lbl, lv_color_hex(0xFFDD66), 0);
+      lv_obj_set_style_pad_top(sun_lbl, 2, 0);
     }
 
     // Pills
@@ -367,8 +382,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_bg_opa(pill, LV_OPA_80, 0);
       lv_obj_set_style_radius(pill, 10, 0);
       lv_obj_set_style_border_width(pill, 2, 0); // Increased 1->2
-      lv_obj_set_style_border_color(pill, lv_color_hex(0x777777),
-                                    0); // Lighter 55->77
+      lv_obj_set_style_border_color(pill, lv_color_hex(0xAAAAAA), 0);
       lv_obj_set_style_border_opa(pill, LV_OPA_70, 0);
       lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_COLUMN);
       lv_obj_set_flex_align(pill, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
@@ -385,8 +399,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
       lv_obj_t *l = lv_label_create(pill);
       lv_label_set_text(l, label);
-      lv_obj_set_style_text_color(l, lv_color_hex(0xDDDDDD),
-                                  0); // Brighter Grey
+      lv_obj_set_style_text_color(l, lv_color_hex(0xFFFFFF), 0);
       lv_obj_set_style_text_font(l, &lv_font_montserrat_16,
                                  0); // Upgrade 14->16
     };
@@ -400,8 +413,15 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
              getWindDir(data.windDirection));
     add_pill(windLabel, buf, 0x90EE90);
 
-    snprintf(buf, sizeof(buf), "%.0f hPa", data.currentPressure);
-    add_pill("Pressure", buf, 0xFFFFFF);
+    {
+      snprintf(buf, sizeof(buf), "UV %.0f", data.currentUVIndex);
+      uint32_t uvColor = 0x00FF00;   // Low (0-2)
+      if (data.currentUVIndex >= 3)  uvColor = 0xFFFF00;  // Moderate
+      if (data.currentUVIndex >= 6)  uvColor = 0xFF8800;  // High
+      if (data.currentUVIndex >= 8)  uvColor = 0xFF4444;  // Very high
+      if (data.currentUVIndex >= 11) uvColor = 0xFF00FF;  // Extreme
+      add_pill("UV Index", buf, uvColor);
+    }
 
     char aqiBuf[32];
     snprintf(aqiBuf, sizeof(aqiBuf), "AQI: %d", data.currentAQI);
@@ -437,11 +457,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
                             LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
       lv_obj_set_style_bg_color(row,
-                                lv_color_hex((i % 2) ? 0x202020 : 0x101010),
-                                0);               // Darker alternating
+                                lv_color_hex((i % 2) ? 0x2A2A2A : 0x181818),
+                                0);
       lv_obj_set_style_bg_opa(row, LV_OPA_80, 0); // High Opacity
       lv_obj_set_style_border_width(row, 2, 0);   // 1->2
-      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(0xAAAAAA), 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -528,6 +548,106 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_label_set_text(temp_lbl, buf);
       lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
     }
+  } else if (forecastMode == 3) {
+    // === CHART VIEW (24h temp + rain probability) ===
+
+    lv_obj_t *chart_cont = lv_obj_create(bg_grad);
+    lv_obj_set_size(chart_cont, LV_PCT(100), 275);
+    lv_obj_align(chart_cont, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_flex_flow(chart_cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(chart_cont, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(chart_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(chart_cont, 0, 0);
+    lv_obj_set_style_pad_all(chart_cont, 4, 0);
+    lv_obj_set_style_pad_row(chart_cont, 4, 0);
+    lv_obj_clear_flag(chart_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(chart_cont, LV_OBJ_FLAG_EVENT_BUBBLE |
+                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    // --- Temperature line chart ---
+    lv_obj_t *temp_title = lv_label_create(chart_cont);
+    lv_label_set_text(temp_title, "Temperature (24h)");
+    lv_obj_set_style_text_font(temp_title, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(temp_title, lv_color_hex(0xEEEEEE), 0);
+
+    lv_obj_t *temp_chart = lv_chart_create(chart_cont);
+    lv_obj_set_size(temp_chart, LV_PCT(100), 105);
+    lv_chart_set_type(temp_chart, LV_CHART_TYPE_LINE);
+    lv_chart_set_point_count(temp_chart, 24);
+    lv_obj_set_style_bg_color(temp_chart, lv_color_hex(0x1A1A2A), 0);
+    lv_obj_set_style_border_color(temp_chart, lv_color_hex(0x666666), 0);
+    lv_obj_set_style_border_width(temp_chart, 1, 0);
+    lv_obj_clear_flag(temp_chart, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(temp_chart, LV_OBJ_FLAG_EVENT_BUBBLE |
+                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    // Find temp range
+    float minT = 999, maxT = -999;
+    for (int i = 0; i < 24; i++) {
+      if (data.hourly[i].temp < minT) minT = data.hourly[i].temp;
+      if (data.hourly[i].temp > maxT) maxT = data.hourly[i].temp;
+    }
+    lv_chart_set_range(temp_chart, LV_CHART_AXIS_PRIMARY_Y,
+                       (lv_coord_t)(minT - 2), (lv_coord_t)(maxT + 2));
+    lv_chart_set_axis_tick(temp_chart, LV_CHART_AXIS_PRIMARY_Y, 6, 3, 5, 2,
+                           true, 30);
+    lv_chart_set_div_line_count(temp_chart, 4, 0);
+
+    lv_chart_series_t *temp_ser =
+        lv_chart_add_series(temp_chart, lv_color_hex(0xFF8800),
+                            LV_CHART_AXIS_PRIMARY_Y);
+    for (int i = 0; i < 24; i++)
+      lv_chart_set_next_value(temp_chart, temp_ser,
+                              (lv_coord_t)data.hourly[i].temp);
+
+    // Hour labels row (shared between charts)
+    lv_obj_t *hour_row = lv_obj_create(chart_cont);
+    lv_obj_set_size(hour_row, LV_PCT(100), 18);
+    lv_obj_set_style_bg_opa(hour_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(hour_row, 0, 0);
+    lv_obj_set_style_pad_all(hour_row, 0, 0);
+    lv_obj_set_flex_flow(hour_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(hour_row, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(hour_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(hour_row, LV_OBJ_FLAG_EVENT_BUBBLE);
+    const char *hrLabels[] = {"Now", "+6h", "+12h", "+18h", "+24h"};
+    for (int i = 0; i < 5; i++) {
+      lv_obj_t *hl = lv_label_create(hour_row);
+      lv_label_set_text(hl, hrLabels[i]);
+      lv_obj_set_style_text_font(hl, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_color(hl, lv_color_hex(0xAAAAAA), 0);
+    }
+
+    // --- Precipitation bar chart ---
+    lv_obj_t *rain_title = lv_label_create(chart_cont);
+    lv_label_set_text(rain_title, "Rain Probability (%)");
+    lv_obj_set_style_text_font(rain_title, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(rain_title, lv_color_hex(0xEEEEEE), 0);
+
+    lv_obj_t *rain_chart = lv_chart_create(chart_cont);
+    lv_obj_set_size(rain_chart, LV_PCT(100), 85);
+    lv_chart_set_type(rain_chart, LV_CHART_TYPE_BAR);
+    lv_chart_set_point_count(rain_chart, 24);
+    lv_obj_set_style_bg_color(rain_chart, lv_color_hex(0x1A1A2A), 0);
+    lv_obj_set_style_border_color(rain_chart, lv_color_hex(0x666666), 0);
+    lv_obj_set_style_border_width(rain_chart, 1, 0);
+    lv_obj_clear_flag(rain_chart, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(rain_chart, LV_OBJ_FLAG_EVENT_BUBBLE |
+                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    lv_chart_set_range(rain_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
+    lv_chart_set_axis_tick(rain_chart, LV_CHART_AXIS_PRIMARY_Y, 6, 3, 5, 2,
+                           true, 30);
+    lv_chart_set_div_line_count(rain_chart, 4, 0);
+
+    lv_chart_series_t *rain_ser =
+        lv_chart_add_series(rain_chart, lv_color_hex(0x00BFFF),
+                            LV_CHART_AXIS_PRIMARY_Y);
+    for (int i = 0; i < 24; i++)
+      lv_chart_set_next_value(rain_chart, rain_ser,
+                              (lv_coord_t)(data.hourly[i].pop * 100));
   }
 
   // Animation

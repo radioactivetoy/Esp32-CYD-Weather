@@ -62,6 +62,7 @@ GuiController::PendingScreen GuiController::pendingScreenChange = GuiController:
 int GuiController::pendingScreenAnim = 0;
 uint32_t GuiController::screenAnimUntil = 0;
 int GuiController::pendingCitySwipeAnim = 0;
+std::atomic<bool> GuiController::longPressTriggered{false};
 SemaphoreHandle_t GuiController::guiMutex = NULL;
 WeatherData GuiController::cachedWeather;
 BusData GuiController::cachedBus;
@@ -431,7 +432,7 @@ void GuiController::handleScreenClick(lv_event_t *e) {
   lastClickTime = millis();
 
   if (currentApp == APP_WEATHER) {
-    forecastMode = (forecastMode + 1) % 3;
+    forecastMode = (forecastMode + 1) % 4; // 0:Current 1:Hourly 2:7Days 3:Chart
     pendingScreenChange = SCREEN_WEATHER;
     pendingScreenAnim = 3; // fade transition for forecast mode cycle
   } else if (currentApp == APP_BUS) {
@@ -441,4 +442,8 @@ void GuiController::handleScreenClick(lv_event_t *e) {
       busStationChanged = true;
     }
   }
+}
+
+void GuiController::handleLongPress(lv_event_t *e) {
+  longPressTriggered = true; // main.cpp polls this and calls the right trigger
 }
