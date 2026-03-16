@@ -530,8 +530,9 @@ void WeatherService::fetchSupplementOpenMeteo(WeatherData &data, float lat,
   String url =
       "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat, 4) +
       "&longitude=" + String(lon, 4) +
-      "&daily=uv_index_max,sunrise,sunset,temperature_2m_max,temperature_2m_min"
-      "&timezone=auto&forecast_days=1";
+      "&daily=uv_index_max,sunrise,sunset,temperature_2m_max,temperature_2m_min,"
+      "weather_code"
+      "&timezone=auto&forecast_days=7";
 
   Serial.println("Fetching Open-Meteo supplement (UV/sunrise): " + url);
   http.begin(client, url);
@@ -555,6 +556,25 @@ void WeatherService::fetchSupplementOpenMeteo(WeatherData &data, float lat,
       Serial.printf("Supplement: UV=%.1f Rise=%s Set=%s H=%.1f L=%.1f\n",
                     data.currentUVIndex, data.sunrise.c_str(),
                     data.sunset.c_str(), hlMax, hlMin);
+
+      // Backfill any daily slots that OWM didn't populate (day 5 & 6)
+      JsonArray omTime = doc["daily"]["time"];
+      int omDays = (int)omTime.size();
+      for (int i = 0; i < 7 && i < omDays; i++) {
+        if (data.daily[i].date.length() == 0) {
+          data.daily[i].date = omTime[i].as<String>();
+          data.daily[i].maxTemp = doc["daily"]["temperature_2m_max"][i] | 0.0f;
+          data.daily[i].minTemp = doc["daily"]["temperature_2m_min"][i] | 0.0f;
+          data.daily[i].weatherCode = doc["daily"]["weather_code"][i] | 3;
+          int y, m, d;
+          if (sscanf(data.daily[i].date.c_str(), "%d-%d-%d", &y, &m, &d) == 3)
+            data.daily[i].moonPhaseIndex = calculateMoonPhase(y, m, d);
+          Serial.printf("Supplement backfill day %d: %s H=%.1f L=%.1f code=%d\n",
+                        i, data.daily[i].date.c_str(),
+                        data.daily[i].maxTemp, data.daily[i].minTemp,
+                        data.daily[i].weatherCode);
+        }
+      }
     }
   }
   http.end();
