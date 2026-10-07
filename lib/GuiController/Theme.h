@@ -14,7 +14,7 @@ namespace Theme {
 constexpr uint32_t BG = 0x000000;        // Screen background
 constexpr uint32_t TEXT = 0xFFFFFF;      // Values, titles
 constexpr uint32_t TEXT_SOFT = 0xDDDDDD; // Header clock
-constexpr uint32_t TEXT_DIM = 0xA8A8A8;  // Labels, secondary info
+constexpr uint32_t TEXT_DIM = 0xC8C8C8;  // Labels (0xA8A8A8 was hard to read)
 constexpr uint32_t DIVIDER = 0x666666;   // Hairlines (darker greys vanish on the panel)
 constexpr uint32_t RAIN = 0x44BBFF;      // Precipitation
 constexpr uint32_t GOOD = 0x55DD55;      // Positive change, low UV, ...
