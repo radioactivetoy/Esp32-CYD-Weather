@@ -88,6 +88,7 @@ No need to edit code! Configure everything via the web interface.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
     -   **API Keys**: Enter your TMB App ID/Key and (optionally) OpenWeatherMap API Key. Without an OWM key, weather comes from Open-Meteo and AQI is not shown.
     -   **Settings & OTA Password** (optional, recommended): Protects this page (HTTP basic auth, user `admin`) and OTA updates. Can also be set in the first-time WiFi setup portal.
+    -   **Status**: the bottom of the page shows firmware build, uptime, WiFi signal, free memory and task stack headroom. The serial log prints the same as a `MON:` line every minute, with warnings when memory or stack runs low.
 
 ## Controls
 -   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).

@@ -1,5 +1,6 @@
 #include "NetworkManager.h"
 #include "NetUtils.h"
+#include "SystemMonitor.h"
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>
 #include <esp_task_wdt.h>
@@ -276,7 +277,21 @@ void NetworkManager::handleRoot() {
   html += "</select><br><br>";
 
   html += "<input type='submit' value='Save & Reboot'></form>";
-  html += "<p>IP: " + WiFi.localIP().toString() + "</p>";
+  html += "<p>IP: " + WiFi.localIP().toString() + " &middot; " + OTA_HOSTNAME +
+          ".local</p>";
+
+  // Device health (same figures as the "MON:" serial log lines)
+  SystemMonitor::Stats st = SystemMonitor::read();
+  char status[320];
+  snprintf(status, sizeof(status),
+           "<h3>Status</h3><p style='font-family:monospace;color:#aaa'>"
+           "Firmware: %s %s<br>Uptime: %s<br>WiFi: %d dBm<br>"
+           "Heap: %u free, %u min, %u largest block<br>"
+           "Stack free: loop %d, net %d bytes</p>",
+           __DATE__, __TIME__, SystemMonitor::formatUptime(st.uptimeS).c_str(),
+           st.rssi, st.heapFree, st.heapMinFree, st.heapLargest,
+           st.loopStackFree, st.netStackFree);
+  html += status;
   html += "</body></html>";
   server.send(200, "text/html", html);
 }

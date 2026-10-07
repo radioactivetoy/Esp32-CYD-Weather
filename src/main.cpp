@@ -3,6 +3,7 @@
 #include "GuiController.h"
 #include "LedController.h"
 #include "NetworkManager.h"
+#include "SystemMonitor.h"
 #include "TouchDrv.h"
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -157,6 +158,9 @@ void loop() {
     GuiController::updateTime();
     updateBacklight();
   }
+
+  // Heap / stack health line every minute on the serial log
+  SystemMonitor::logPeriodic();
 
   // Yield instead of spinning at 100% CPU; LVGL only needs a few ms cadence.
   delay(5);

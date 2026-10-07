@@ -34,6 +34,8 @@ struct WeatherData {
   int windDirection = 0;
   float currentRainProb = 0;
   bool isNight = false;
+  String sunrise; // "HH:MM" city-local, empty = unknown
+  String sunset;
   int hourlyStepHours = 1; // 1 = Open-Meteo hourly, 3 = OWM 3-hour slots
   uint32_t lastUpdate = 0; // millis() of last successful update, 0 = no data
   DailyForecast daily[7];

@@ -109,6 +109,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(list, 0, 0);
   lv_obj_set_style_pad_all(list, 0, 0); // Fix: Remove default padding
+  lv_obj_set_style_pad_row(list, 2, 0);  // 5 rows x 54px + gaps fit in 280px
   lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
 
   if (data.empty()) {
@@ -128,7 +129,10 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   } else {
     for (const auto &item : data) {
       lv_obj_t *row = lv_obj_create(list);
-      lv_obj_set_size(row, LV_PCT(100), 70); // 70px Height
+      // 54px: 5 symbols visible. Content height 54 - 2x2 border - 2x3 pad =
+      // 44px, enough for the price (25px) + change (16px) stack.
+      lv_obj_set_size(row, LV_PCT(100), 54);
+      lv_obj_set_style_pad_ver(row, 3, 0);
       lv_obj_set_style_bg_color(row, lv_color_hex(0x202020), 0);
       lv_obj_set_style_bg_opa(row, LV_OPA_80, 0);
       lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);

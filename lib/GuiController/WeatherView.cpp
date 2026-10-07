@@ -258,7 +258,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
     // Glass Card
     lv_obj_t *glass_card = lv_obj_create(bg_grad);
-    lv_obj_set_size(glass_card, 180, 172); // 155 + "Feels like" line
+    lv_obj_set_size(glass_card, 180, 170); // 155 + "Feels like" line
     lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
                  38); // Align below header (moved up 45->38)
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
@@ -374,6 +374,18 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_style_text_font(rain_appended, &lv_font_montserrat_16, 0);
     }
 
+    // Sunrise / sunset, in the gap between the card (ends y=208) and the
+    // pills (start y=228)
+    if (data.sunrise.length() > 0 && data.sunset.length() > 0) {
+      lv_obj_t *sun_lbl = lv_label_create(bg_grad);
+      snprintf(buf, sizeof(buf), "Sunrise %s  \xC2\xB7  Sunset %s", // ·
+               data.sunrise.c_str(), data.sunset.c_str());
+      lv_label_set_text(sun_lbl, buf);
+      lv_obj_set_style_text_font(sun_lbl, &Fonts::text14, 0);
+      lv_obj_set_style_text_color(sun_lbl, lv_color_hex(0xFFCC66), 0);
+      lv_obj_align(sun_lbl, LV_ALIGN_TOP_MID, 0, 209);
+    }
+
     // Pills
     lv_obj_t *details_cont = lv_obj_create(bg_grad);
     lv_obj_set_size(details_cont, 220, 90);
@@ -424,7 +436,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     snprintf(buf, sizeof(buf), "%d%%", data.currentHumidity);
     add_pill("Humidity", buf, 0xFFFFFF);
 
-    snprintf(buf, sizeof(buf), "%.1f km/h", data.windSpeed);
+    snprintf(buf, sizeof(buf), "%.0f km/h", data.windSpeed);
     char windLabel[16];
     snprintf(windLabel, sizeof(windLabel), "Wind %s",
              getWindDir(data.windDirection));

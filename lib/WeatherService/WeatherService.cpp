@@ -215,7 +215,7 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
       "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
       "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day"
       "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-      "precipitation_probability_max"
+      "precipitation_probability_max,sunrise,sunset"
       "&hourly=temperature_2m,weather_code,precipitation_probability,is_day"
       "&timezone=auto&past_days=1";
 
@@ -256,6 +256,15 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
             (doc["daily"]["precipitation_probability_max"][jsonIdx] | 0) /
             100.0f;
       }
+
+      // Today's sun times ("YYYY-MM-DDTHH:MM", already city-local); index 1
+      // is today because of past_days=1
+      String rise = doc["daily"]["sunrise"][1] | "";
+      String set = doc["daily"]["sunset"][1] | "";
+      if (rise.length() >= 16)
+        data.sunrise = rise.substring(11, 16);
+      if (set.length() >= 16)
+        data.sunset = set.substring(11, 16);
 
       // Hourly: yesterday occupies 0..23, today starts at 24. Skip the hours
       // already past *in the city's own time zone*, not the device's.
@@ -322,6 +331,8 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
     f["wind"]["speed"] = true;
     f["wind"]["deg"] = true;
     filter["city"]["timezone"] = true;
+    filter["city"]["sunrise"] = true;
+    filter["city"]["sunset"] = true;
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(
@@ -335,6 +346,20 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
       ok = true;
       data.hourlyStepHours = 3;
       long tzOffset = doc["city"]["timezone"] | 0L;
+
+      // Sun times (UTC epochs) -> city-local "HH:MM"
+      long riseUtc = doc["city"]["sunrise"] | 0L;
+      long setUtc = doc["city"]["sunset"] | 0L;
+      if (riseUtc > 0 && setUtc > 0) {
+        struct tm t;
+        char hm[8];
+        toCityLocal(riseUtc, tzOffset, t);
+        strftime(hm, sizeof(hm), "%H:%M", &t);
+        data.sunrise = hm;
+        toCityLocal(setUtc, tzOffset, t);
+        strftime(hm, sizeof(hm), "%H:%M", &t);
+        data.sunset = hm;
+      }
 
       // 1. "Hourly" list (3-hour steps). Times are converted to city-local.
       for (int i = 0; i < 24 && i < (int)list.size(); i++) {
