@@ -168,9 +168,13 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                       NULL);
 
   auto getWindDir = [](int deg) -> const char * {
-    const char *dirs[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-    return dirs[((deg + 22) % 360) / 45];
+    static const char *dirs[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+    int d = ((deg % 360) + 360) % 360; // Normalize, also for negative input
+    return dirs[((d + 22) / 45) % 8];
   };
+
+  // lastUpdate == 0: no successful fetch for this city yet (placeholder)
+  bool noData = (data.lastUpdate == 0);
 
   // === COMMON HEADER ===
   lv_obj_t *header_row = lv_obj_create(bg_grad);
@@ -196,7 +200,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   if (forecastMode == 1)
     titleText += " - Hourly";
   else if (forecastMode == 2)
-    titleText += " - 7 Days";
+    titleText += " - Daily";
   lv_label_set_text(city_lbl, titleText.c_str());
 
   struct tm timeinfo;
@@ -230,7 +234,18 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   }
   lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
 
-  if (forecastMode == 0) {
+  if (noData) {
+    // === NO DATA YET === (keeps gestures working while we wait)
+    lv_obj_t *wait_lbl = lv_label_create(bg_grad);
+    lv_label_set_text(wait_lbl, DataManager::isWeatherUpdating(
+                                    GuiController::getCityIndex())
+                                    ? "Fetching weather..."
+                                    : "No weather data yet.\nRetrying soon.");
+    lv_obj_set_style_text_color(wait_lbl, lv_color_hex(0xAAAAAA), 0);
+    lv_obj_set_style_text_font(wait_lbl, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(wait_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(wait_lbl, LV_ALIGN_CENTER, 0, 0);
+  } else if (forecastMode == 0) {
     // === CURRENT WEATHER ===
 
     // Glass Card
@@ -404,8 +419,13 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     add_pill("Pressure", buf, 0xFFFFFF);
 
     char aqiBuf[32];
-    snprintf(aqiBuf, sizeof(aqiBuf), "AQI: %d", data.currentAQI);
     uint32_t aqiColor = 0x00FF00; // Good (1)
+    if (data.currentAQI <= 0) {
+      snprintf(aqiBuf, sizeof(aqiBuf), "AQI: --"); // Unknown / no OWM key
+      aqiColor = 0x888888;
+    } else {
+      snprintf(aqiBuf, sizeof(aqiBuf), "AQI: %d", data.currentAQI);
+    }
     if (data.currentAQI == 2)
       aqiColor = 0xADFF2F; // Fair (GreenYellow)
     else if (data.currentAQI == 3)
@@ -431,6 +451,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
     int count = isHourly ? 24 : 7;
     for (int i = 0; i < count; i++) {
+      // Providers fill fewer slots than we have room for (OWM: ~6 days)
+      if (isHourly ? data.hourly[i].time.isEmpty()
+                   : data.daily[i].date.isEmpty())
+        break;
+
       lv_obj_t *row = lv_obj_create(list);
       lv_obj_set_size(row, LV_PCT(100), 45);
       lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);

@@ -65,19 +65,25 @@ void LedController::update(const WeatherData &data) {
     return;
   }
 
-  // 2. Orange: Rain expected in next 2 hours
-  for (int i = 1; i <= 2; i++) {
+  // Slots are 1h apart with Open-Meteo but 3h apart with OWM, so work in
+  // hours ahead rather than slot indices. Open-Meteo slot 0 is the current
+  // hour (already covered above); OWM slot 0 is the next 0-3h window.
+  int step = data.hourlyStepHours > 0 ? data.hourlyStepHours : 1;
+  int first = (step == 1) ? 1 : 0;
+
+  // 2. Orange: Rain expected within ~2 hours
+  for (int i = first; i < 24 && i * step <= 2; i++) {
     if (isRain(data.hourly[i].weatherCode)) {
-      Serial.printf("LED: Condition ORANGE (Rain in %dh)\n", i);
+      Serial.printf("LED: Condition ORANGE (Rain in ~%dh)\n", i * step);
       setRGB(255, 60, 0); // ORANGE (Reduced Green for better contrast vs Red)
       return;
     }
   }
 
-  // 3. Blue: Rain expected later
-  for (int i = 3; i < 15; i++) {
-    if (i >= 24)
-      break;
+  // 3. Blue: Rain expected later (up to ~14 hours ahead)
+  for (int i = first; i < 24 && i * step < 15; i++) {
+    if (i * step <= 2)
+      continue;
     if (isRain(data.hourly[i].weatherCode)) {
       Serial.println("LED: Condition BLUE (Rain later)");
       setRGB(0, 0, 255); // BLUE (Replaces Yellow for better visibility)

@@ -58,7 +58,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
   http.setTimeout(5000);
 
   int httpResponseCode = http.GET();
-  if (httpResponseCode > 0) {
+  if (httpResponseCode == HTTP_CODE_OK) {
     // Use Stream to save RAM
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());

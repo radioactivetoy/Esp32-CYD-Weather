@@ -97,8 +97,12 @@ void loop() {
   // --- DATA SYNC ---
   // We poll DataManager for thread-safe updates
 
+  // Reused across iterations to avoid reallocating large structs every pass
+  static WeatherData wd;
+  static BusData bd;
+  static std::vector<StockItem> sd;
+
   // 1. Weather Update
-  WeatherData wd;
   if (DataManager::getWeatherData(wd)) {
     GuiController::updateWeatherCache(wd);
     if (!weatherInitialized || GuiController::isWeatherScreenActive()) {
@@ -108,7 +112,6 @@ void loop() {
   }
 
   // 2. Bus Update
-  BusData bd;
   bool busUpdated = false;
   if (DataManager::getBusData(bd)) {
     GuiController::updateBusCache(bd);
@@ -119,7 +122,6 @@ void loop() {
   }
 
   // 3. Stock Update
-  std::vector<StockItem> sd;
   if (DataManager::getStockData(sd)) {
     GuiController::updateStockCache(sd);
     if (GuiController::isStockScreenActive()) {
@@ -155,4 +157,7 @@ void loop() {
     GuiController::updateTime();
     updateBacklight();
   }
+
+  // Yield instead of spinning at 100% CPU; LVGL only needs a few ms cadence.
+  delay(5);
 }

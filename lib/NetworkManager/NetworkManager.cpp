@@ -1,4 +1,5 @@
 #include "NetworkManager.h"
+#include "NetUtils.h"
 #include <WiFiManager.h>
 
 Preferences NetworkManager::prefs;
@@ -16,6 +17,7 @@ int NetworkManager::nightBrightness = 10;
 String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
 String NetworkManager::ledBrightness = "medium";
 String NetworkManager::owmApiKey = "";
+String NetworkManager::webPassword = "";
 WebServer NetworkManager::server(80);
 
 String NetworkManager::getLedBrightness() { return ledBrightness; }
@@ -24,40 +26,16 @@ int NetworkManager::getDayBrightness() { return dayBrightness; }
 int NetworkManager::getNightBrightness() { return nightBrightness; }
 
 std::vector<String> NetworkManager::getBusStops() {
-  std::vector<String> stops;
-  int start = 0;
-  while (start < busStop.length()) {
-    int comma = busStop.indexOf(',', start);
-    if (comma == -1)
-      comma = busStop.length();
-    String s = busStop.substring(start, comma);
-    s.trim();
-    if (s.length() > 0)
-      stops.push_back(s);
-    start = comma + 1;
-    if (stops.size() >= 5)
-      break; // Limit to 5 stops
-  }
+  std::vector<String> stops = NetUtils::splitList(busStop, ',', 5);
   if (stops.empty())
     stops.push_back("2156"); // Default
   return stops;
 }
 
 std::vector<String> NetworkManager::getCities() {
-  std::vector<String> cities;
-  int start = 0;
-  while (start < city.length()) {
-    int comma = city.indexOf(',', start);
-    if (comma == -1)
-      comma = city.length();
-    String s = city.substring(start, comma);
-    s.trim();
-    if (s.length() > 0)
-      cities.push_back(s);
-    start = comma + 1;
-    if (cities.size() >= 5)
-      break; // Limit to 5 cities
-  }
+  // ';' lets city names carry a country code: "Paris,FR;Paris,US"
+  char sep = city.indexOf(';') >= 0 ? ';' : ',';
+  std::vector<String> cities = NetUtils::splitList(city, sep, 5);
   if (cities.empty())
     cities.push_back("Barcelona");
   return cities;
@@ -67,7 +45,22 @@ void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
 
 void NetworkManager::handleClient() { server.handleClient(); }
 
+// Returns true when the request may proceed. With no password set the page
+// stays open (as before); otherwise HTTP basic auth with user "admin".
+bool NetworkManager::checkAuth() {
+  if (webPassword.length() == 0)
+    return true;
+  if (server.authenticate("admin", webPassword.c_str()))
+    return true;
+  server.requestAuthentication();
+  return false;
+}
+
 void NetworkManager::handleRoot() {
+  if (!checkAuth())
+    return;
+  using NetUtils::htmlEscape;
+
   String html = "<html><head><title>Weather Clock Settings</title>";
   html +=
       "<meta name='viewport' content='width=device-width, initial-scale=1'>";
@@ -85,17 +78,25 @@ void NetworkManager::handleRoot() {
   String appId = getAppId();
   String appKey = getAppKey();
 
-  html +=
-      "City Name:<br><input type='text' name='city' value='" + city + "'><br>";
-  html += "Bus Stop ID:<br><input type='text' name='busStop' value='" +
-          busStop + "'><br>";
-  html += "TMB App ID:<br><input type='text' name='appId' value='" + appId +
-          "'><br>";
-  html += "TMB App Key:<br><input type='text' name='appKey' value='" + appKey +
-          "'><br>";
-  html +=
-      "OWM API Key (Optional):<br><input type='text' name='owmApiKey' value='" +
-      owmApiKey + "'><br><br>";
+  html += "City Names (comma separated, or use ; to add a country code, e.g. "
+          "Paris,FR;London,GB):<br><input type='text' name='city' value='" +
+          htmlEscape(city) + "'><br>";
+  html += "Bus Stop IDs (comma separated):<br><input type='text' "
+          "name='busStop' value='" +
+          htmlEscape(busStop) + "'><br>";
+  html += "TMB App ID:<br><input type='text' name='appId' value='" +
+          htmlEscape(appId) + "'><br>";
+  html += "TMB App Key:<br><input type='password' name='appKey' value='" +
+          htmlEscape(appKey) + "'><br>";
+  html += "OWM API Key (Optional, enables AQI and OWM forecasts):<br><input "
+          "type='password' name='owmApiKey' value='" +
+          htmlEscape(owmApiKey) + "'><br>";
+  html += "Settings Password (Optional, user 'admin'; leave blank to keep):"
+          "<br><input type='password' name='webPassword' value=''><br>";
+  if (webPassword.length() > 0)
+    html += "<label><input type='checkbox' name='clearWebPassword' "
+            "style='width:auto'> Remove password</label><br>";
+  html += "<br>";
 
   // Improvements
   html += "<h3>Lighting</h3>";
@@ -196,7 +197,7 @@ void NetworkManager::handleRoot() {
   html += "<h3>Stock Ticker</h3>";
   html += "Symbols (comma split):<br><input type='text' name='stockSymbols' "
           "value='" +
-          stockSymbols + "'><br><br>";
+          htmlEscape(stockSymbols) + "'><br><br>";
 
   html += "LED Brightness:<br><select name='ledBrightness'>";
   String b_opts[] = {"low", "medium", "high"};
@@ -213,15 +214,28 @@ void NetworkManager::handleRoot() {
 }
 
 void NetworkManager::handleSave() {
+  if (!checkAuth())
+    return;
   if (server.hasArg("city") && server.hasArg("busStop")) {
     city = server.arg("city");
     busStop = server.arg("busStop");
     appId = server.arg("appId");
     appKey = server.arg("appKey");
     owmApiKey = server.arg("owmApiKey");
+    city.trim();
+    busStop.trim();
+    appId.trim();
+    appKey.trim();
+    owmApiKey.trim();
+
+    if (server.hasArg("clearWebPassword"))
+      webPassword = "";
+    else if (server.arg("webPassword").length() > 0)
+      webPassword = server.arg("webPassword");
 
     // New Params
-    timezone = server.arg("timezone");
+    if (server.arg("timezone").length() > 0)
+      timezone = server.arg("timezone");
     nightMode = server.hasArg("nightMode"); // Checkbox present = true
     nightStart = server.arg("nightStart").toInt();
     nightEnd = server.arg("nightEnd").toInt();
@@ -238,6 +252,7 @@ void NetworkManager::handleSave() {
     prefs.putString("app_id", appId);
     prefs.putString("app_key", appKey);
     prefs.putString("owmApiKey", owmApiKey);
+    prefs.putString("webPassword", webPassword);
 
     prefs.putString("timezone", timezone);
     prefs.putBool("nightMode", nightMode);
@@ -252,7 +267,9 @@ void NetworkManager::handleSave() {
     prefs.putString("stockSymbols", stockSymbols);
 
     // LED
-    ledBrightness = server.arg("ledBrightness");
+    String led = server.arg("ledBrightness");
+    if (led == "low" || led == "medium" || led == "high")
+      ledBrightness = led;
     prefs.putString("ledBrightness", ledBrightness);
 
     prefs.end();
@@ -303,6 +320,7 @@ void NetworkManager::begin() {
 
   // Custom Keys
   owmApiKey = prefs.getString("owmApiKey", "");
+  webPassword = prefs.getString("webPassword", "");
 
   WiFiManager wm;
   wm.setSaveConfigCallback(saveConfigCallback);
@@ -311,8 +329,9 @@ void NetworkManager::begin() {
   // Custom Parameters
   // id/name, placeholder/prompt, default, length
   WiFiManagerParameter custom_city("city", "City Name", city.c_str(), 128);
-  WiFiManagerParameter custom_busStop("busStop", "Bus Stop ID", busStop.c_str(),
-                                      10);
+  // 64 chars: room for up to 5 comma-separated stop IDs
+  WiFiManagerParameter custom_busStop("busStop", "Bus Stop IDs",
+                                      busStop.c_str(), 64);
   WiFiManagerParameter custom_appId("appId", "TMB App ID", appId.c_str(), 32);
   WiFiManagerParameter custom_appKey("appKey", "TMB App Key", appKey.c_str(),
                                      64);
@@ -332,12 +351,8 @@ void NetworkManager::begin() {
   }
   Serial.println("NETWORK: WiFi Connected!");
 
-  // Init NTP
-  configTime(3600, 3600, "pool.ntp.org"); // GMT+1 + Daylight Saving
-  // More specific for Barcelona:
-  // More specific for Barcelona (OR Configured):
-  setenv("TZ", timezone.c_str(), 1);
-  tzset();
+  // Init NTP with the configured POSIX time zone
+  configTzTime(timezone.c_str(), "pool.ntp.org");
 
   if (shouldSaveConfig) {
     Serial.println("NETWORK: Saving New Config...");

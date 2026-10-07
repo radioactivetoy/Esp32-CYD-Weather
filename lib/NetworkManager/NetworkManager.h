@@ -1,11 +1,10 @@
+#pragma once
+
 #include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
-
-extern SemaphoreHandle_t dataMutex;
+#include <vector>
 
 class NetworkManager {
 public:
@@ -31,9 +30,9 @@ public:
 
   static String getStockSymbols();
   static String getLedBrightness();
-  static std::vector<String>
-  getBusStops(); // New: Split "2156,1234" // low, medium, high
-  static std::vector<String> getCities(); // New: Split "Barcelona,Madrid"
+  static std::vector<String> getBusStops(); // Split "2156,1234"
+  // Split "Barcelona,Madrid", or "Paris,FR;London,GB" when ';' is used
+  static std::vector<String> getCities();
 
   // Legacy method if used
   static bool isConnected() { return WiFi.status() == WL_CONNECTED; }
@@ -54,7 +53,9 @@ private:
   static int nightBrightness;
   static String stockSymbols;
   static String ledBrightness;
+  static String webPassword; // Optional HTTP basic auth for the settings page
   static bool shouldSaveConfig;
+  static bool checkAuth();
   static void saveConfigCallback();
   static void configModeCallback(WiFiManager *myWiFiManager);
 

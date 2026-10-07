@@ -6,10 +6,6 @@
 LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_20);
 
-static void opa_anim_cb(void *obj, int32_t v) {
-  lv_obj_set_style_opa((lv_obj_t *)obj, v, 0);
-}
-
 lv_color_t BusView::getBusLineColor(const String &line, lv_color_t &textColor) {
   textColor = lv_color_hex(0xFFFFFF);
 
@@ -183,20 +179,11 @@ void BusView::show(const BusData &data, int anim) {
 
       uint32_t eta_col = 0x00FF00;
       int mins = arr.seconds / 60;
-      if (mins <= 2) {
+      // No opacity pulse here: an LV_ANIM_REPEAT_INFINITE anim on a child
+      // can fire after auto_del frees the old screen.
+      if (mins <= 2)
         eta_col = 0xFF4500;
-        lv_anim_t a;
-        lv_anim_init(&a);
-        lv_anim_set_var(&a, timeLbl);
-        lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_40);
-        lv_anim_set_time(&a, 800);
-        lv_anim_set_playback_delay(&a, 100);
-        lv_anim_set_playback_time(&a, 500);
-        lv_anim_set_repeat_delay(&a, 100);
-        // Opacity pulse intentionally disabled: LV_ANIM_REPEAT_INFINITE on a
-        // child object can fire after auto_del frees the old screen. Re-enable
-        // only if LVGL animation lifecycle is explicitly managed.
-      } else if (mins <= 5)
+      else if (mins <= 5)
         eta_col = 0xFFFF00;
       lv_obj_set_style_text_color(timeLbl, lv_color_hex(eta_col), 0);
 

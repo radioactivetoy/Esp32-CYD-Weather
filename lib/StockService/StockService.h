@@ -6,14 +6,14 @@
 
 struct StockItem {
   String symbol;
-  float price;
-  float changePercent;
-  bool isValid;
+  float price = 0;
+  float changePercent = 0;
+  bool isValid = false;
 };
 
 class StockService {
 public:
-  static std::vector<StockItem> getQuotes(String symbols);
+  static std::vector<StockItem> getQuotes(const String &symbols);
 };
 
 #endif

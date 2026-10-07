@@ -11,7 +11,8 @@
 static const uint16_t screenWidth = 240;
 static const uint16_t screenHeight = 320;
 static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf[screenWidth * 60];
+static const uint32_t drawBufLines = 30;
+static lv_color_t buf[screenWidth * drawBufLines];
 TFT_eSPI tft = TFT_eSPI();
 
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
@@ -34,8 +35,9 @@ std::atomic<int> GuiController::busStopCount{1};
 std::atomic<bool> GuiController::busStationChanged{false};
 int GuiController::getBusIndex() { return currentBusIndex; }
 void GuiController::setBusStopCount(int count) { busStopCount = count; }
-bool GuiController::hasBusStationChanged() { return busStationChanged; }
-void GuiController::clearBusStationChanged() { busStationChanged = false; }
+bool GuiController::consumeBusStationChanged() {
+  return busStationChanged.exchange(false);
+}
 
 // City State
 std::atomic<int> GuiController::currentCityIndex{0};
@@ -43,8 +45,7 @@ std::atomic<int> GuiController::cityCount{1};
 std::atomic<bool> GuiController::cityChanged{false};
 int GuiController::getCityIndex() { return currentCityIndex; }
 void GuiController::setCityCount(int count) { cityCount = count; }
-bool GuiController::hasCityChanged() { return cityChanged; }
-void GuiController::clearCityChanged() { cityChanged = false; }
+bool GuiController::consumeCityChanged() { return cityChanged.exchange(false); }
 
 bool GuiController::isBusScreenActive() { return currentApp == APP_BUS; }
 bool GuiController::isStockScreenActive() { return currentApp == APP_STOCK; }
@@ -80,7 +81,7 @@ void GuiController::init() {
   lv_init();
   tft.begin();
   tft.setRotation(0);
-  lv_disp_draw_buf_init(&draw_buf, buf, NULL, screenWidth * 30);
+  lv_disp_draw_buf_init(&draw_buf, buf, NULL, screenWidth * drawBufLines);
   static lv_disp_drv_t disp_drv;
   lv_disp_drv_init(&disp_drv);
   disp_drv.hor_res = screenWidth;
@@ -126,7 +127,7 @@ void GuiController::applyPendingScreenChange() {
   // Wait for any ongoing screen transition animation to finish before
   // starting another. Calling lv_scr_load_anim while an anim is active
   // corrupts LVGL's internal screen/event state and causes LoadProhibited.
-  if (millis() < screenAnimUntil)
+  if ((int32_t)(millis() - screenAnimUntil) < 0) // wrap-safe
     return;
   PendingScreen toShow = pendingScreenChange;
   int anim = pendingScreenAnim;
@@ -188,14 +189,6 @@ void GuiController::drawLoadingScreen(const char *msg) {
   // For safety, let's use default font or declare one locally if needed.
   // Actually, let's just use default LVGL font for Loading to avoid
   // dependency/declaration mess or rely on what's available.
-}
-
-void GuiController::handle(uint32_t ms) {
-  uint32_t start = millis();
-  while (millis() - start < ms) {
-    lv_timer_handler();
-    delay(5);
-  }
 }
 
 String GuiController::sanitize(const String &text) {
@@ -318,18 +311,6 @@ void GuiController::updateTime() {
   }
 }
 
-static bool isDirUp(lv_dir_t dir) {
-  return dir == LV_DIR_TOP;
-}
-static bool isDirDown(lv_dir_t dir) {
-  return dir == LV_DIR_BOTTOM;
-}
-static bool isDirLeft(lv_dir_t dir) {
-  return dir == LV_DIR_LEFT;
-}
-static bool isDirRight(lv_dir_t dir) {
-  return dir == LV_DIR_RIGHT;
-}
 
 void GuiController::handleSwipe(int16_t dx, int16_t dy) {
   if (abs(dx) > abs(dy) && abs(dx) > 40) {

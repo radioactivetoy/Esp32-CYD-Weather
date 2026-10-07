@@ -1,178 +1,87 @@
 #include "WeatherService.h"
+#include "NetUtils.h"
 #include <WiFiClientSecure.h>
+#include <time.h>
 
-// Open-Meteo URL:
-// https://api.open-meteo.com/v1/forecast?latitude=XX&longitude=YY&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto
+// Map an OWM icon id ("01d", "10n", ...) to the closest WMO weather code.
+static int owmIconToWmo(const char *icon) {
+  if (!icon || strlen(icon) < 2)
+    return 3;
+  if (strncmp(icon, "01", 2) == 0)
+    return 0; // Clear
+  if (strncmp(icon, "02", 2) == 0)
+    return 1; // Few clouds
+  if (strncmp(icon, "03", 2) == 0)
+    return 2; // Scattered
+  if (strncmp(icon, "04", 2) == 0)
+    return 3; // Broken / overcast
+  if (strncmp(icon, "09", 2) == 0)
+    return 80; // Shower rain
+  if (strncmp(icon, "10", 2) == 0)
+    return 61; // Rain
+  if (strncmp(icon, "11", 2) == 0)
+    return 95; // Thunder
+  if (strncmp(icon, "13", 2) == 0)
+    return 71; // Snow
+  if (strncmp(icon, "50", 2) == 0)
+    return 45; // Mist
+  return 3;
+}
 
-// Helper to calculate moon phase (0-7)
-// 0: New, 1: WaxCresc, 2: 1stQ, 3: WaxGibb, 4: Full, 5: WanGibb, 6: 3rdQ, 7:
-// WanCresc
-int calculateMoonPhase(int year, int month, int day) {
-  if (month < 3) {
-    year--;
-    month += 12;
+static bool isNightIcon(const char *icon) {
+  size_t len = icon ? strlen(icon) : 0;
+  return len > 0 && icon[len - 1] == 'n';
+}
+
+// True once NTP has set the clock (anything after 2023).
+static bool clockIsSet() { return time(nullptr) > 1700000000; }
+
+// Breaks a UTC epoch shifted by the city's UTC offset into local fields.
+static void toCityLocal(time_t utc, long offsetSec, struct tm &out) {
+  time_t t = utc + offsetSec;
+  gmtime_r(&t, &out);
+}
+
+// Opens an HTTPS GET; returns true only on HTTP 200.
+static bool httpsGet(HTTPClient &http, WiFiClientSecure &client,
+                     const String &url, uint16_t timeoutMs) {
+  client.setInsecure();
+  if (!http.begin(client, url))
+    return false;
+  http.useHTTP10(true); // No chunked encoding: we parse straight from the stream
+  http.setConnectTimeout(timeoutMs);
+  http.setTimeout(timeoutMs);
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("WEATHER: HTTP error %d\n", code);
+    return false;
   }
-  ++month;
-  // Julian Date approx
-  double c = 365.25 * year;
-  double e = 30.6 * month;
-  double jd = c + e + day - 694039.09;
-  jd /= 29.5305882; // Determine lunar cycles
-  int b = (int)jd;
-  jd -= b;                 // fractional part only [0..1]
-  b = (int)(jd * 8 + 0.5); // resize to 0..8 scale
-  b = b & 7;               // cap to 0..7
-  return b;
+  return true;
 }
 
 bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
-                                   String owmApiKey) {
+                                   const String &owmApiKey) {
   if (WiFi.status() != WL_CONNECTED)
     return false;
 
-  bool weatherSuccess = false;
+  bool hasKey = owmApiKey.length() > 0;
 
-  // 1. Fetch Forecast (Prioritize OWM)
-  bool forecastSuccess = false;
-  if (owmApiKey.length() > 0) {
-    forecastSuccess = updateForecastOWM_5Day(data, lat, lon, owmApiKey);
-    if (forecastSuccess)
-      weatherSuccess = true;
-  }
-
-  if (!forecastSuccess) {
-    // Fallback to Open-Meteo
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-
-    // Change http -> https
-    String url =
-        "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat) +
-        "&longitude=" + String(lon) +
-        "&current=temperature_2m,relative_humidity_2m,apparent_"
-        "temperature,"
-        "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day" +
-        "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
-        "&hourly=temperature_2m,weather_code&timezone=auto&past_days="
-        "1"; // Added past_days=1
-
-    Serial.println("Fetching Open-Meteo: " + url);
-    http.begin(client, url); // Pass client
-    http.useHTTP10(true);    // Disable Chunked Transfer for Stream Parsing
-    http.setConnectTimeout(5000);
-    http.setTimeout(5000);
-
-    int httpResponseCode = http.GET();
-    if (httpResponseCode > 0) {
-      // Stream Parsing for Memory Safety
-      JsonDocument doc; // Changed to DynamicJsonDocument if stack issue, but
-                        // JsonDocument is ArduinoJson 7
-      DeserializationError error = deserializeJson(doc, http.getStream());
-
-      if (error) {
-        Serial.print("Deserialize Open-Meteo failed: ");
-        Serial.println(error.c_str());
-      } else {
-        weatherSuccess = true;
-        JsonObject current = doc["current"];
-        data.currentTemp = current["temperature_2m"];
-        data.currentHumidity = current["relative_humidity_2m"];
-        data.currentPressure = current["pressure_msl"];
-        data.currentFeelsLike = current["apparent_temperature"];
-        data.currentWeatherCode = current["weather_code"];
-        data.windSpeed = current["wind_speed_10m"];
-        data.windDirection = current["wind_direction_10m"];
-
-        // Night Detection
-        int isDay = current["is_day"];
-        data.isNight = (isDay == 0);
-
-        JsonArray time = doc["daily"]["time"];
-        // Loop for Today (Index 1) -> +6 Days
-        // We map JSON index i+1 to storage index i
-        for (int i = 0; i < 7; i++) {
-          int jsonIdx = i + 1; // Shift by 1 because 0 is Yesterday
-          if (jsonIdx >= (int)time.size())
-            break;
-
-          data.daily[i].date = time[jsonIdx].template as<String>();
-          data.daily[i].maxTemp = doc["daily"]["temperature_2m_max"][jsonIdx];
-          data.daily[i].minTemp = doc["daily"]["temperature_2m_min"][jsonIdx];
-          data.daily[i].weatherCode = doc["daily"]["weather_code"][jsonIdx];
-
-          int y, m, d;
-          if (sscanf(data.daily[i].date.c_str(), "%d-%d-%d", &y, &m, &d) == 3) {
-            data.daily[i].moonPhaseIndex = calculateMoonPhase(y, m, d);
-          }
-        }
-        data.currentMoonPhase = data.daily[0].moonPhaseIndex;
-
-        JsonArray h_time = doc["hourly"]["time"];
-        struct tm timeinfo;
-        // past_days=1 in the URL prepends 24 hours of yesterday; today starts
-        // at index 24. Add the current hour to skip already-past slots.
-        int startIdx = 24;
-        if (getLocalTime(&timeinfo))
-          startIdx = 24 + timeinfo.tm_hour;
-
-        for (int i = 0; i < 24; i++) {
-          int idx = startIdx + i;
-          if (idx >= (int)h_time.size())
-            break;
-          data.hourly[i].time = h_time[idx].template as<String>();
-          data.hourly[i].temp = doc["hourly"]["temperature_2m"][idx];
-          data.hourly[i].weatherCode = doc["hourly"]["weather_code"][idx];
-        }
-      }
-    }
-    http.end();
-    client.stop();
-  }
-
-  if (!weatherSuccess)
+  // 1. Forecast: prefer OWM, fall back to keyless Open-Meteo
+  bool forecastOk = false;
+  if (hasKey)
+    forecastOk = updateForecastOWM_5Day(data, lat, lon, owmApiKey);
+  if (!forecastOk)
+    forecastOk = updateForecastOpenMeteo(data, lat, lon);
+  if (!forecastOk)
     return false;
 
-  // 2. Air Quality Forecast (OWM Air Pollution)
-  // Scale 1 (Good) to 5 (Poor)
-  {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-    String aqiUrl =
-        "https://api.openweathermap.org/data/2.5/air_pollution?lat=" +
-        String(lat) + "&lon=" + String(lon) + "&appid=" + owmApiKey;
-
-    Serial.println("Fetching AQI OWM: " + aqiUrl);
-    http.begin(client, aqiUrl);
-    http.setConnectTimeout(5000);
-    http.setTimeout(5000); // 5s timeout
-    int aqiRes = http.GET();
-    if (aqiRes > 0) {
-      JsonDocument doc;
-      DeserializationError error = deserializeJson(doc, http.getStream());
-      if (!error) {
-        // "list": [{ "main": { "aqi": 1 }, ... }]
-        if (doc.containsKey("list")) {
-          // OWM: 1 (Good), 2 (Fair), 3 (Moderate), 4 (Poor), 5 (Very Poor)
-          data.currentAQI = doc["list"][0]["main"]["aqi"];
-        }
-      } else {
-        Serial.print("AQI Parse Error: ");
-        Serial.println(error.c_str());
-      }
-    } else {
-      Serial.printf("AQI HTTP Error: %d\n", aqiRes);
-    }
-    http.end();
-    client.stop();
-  }
-
-  // 3. Hybrid: Overwrite Current Weather with OpenWeatherMap if Key is present
-  if (weatherSuccess && owmApiKey.length() > 0) {
+  if (hasKey) {
+    // 2. Air quality (OWM only)
+    updateAirQualityOWM(data, lat, lon, owmApiKey);
+    // 3. More accurate current conditions. If this fails, the forecast
+    //    already filled in current values from the nearest slot.
     updateCurrentWeatherOWM(data, lat, lon, owmApiKey);
   }
-
   return true;
 }
 
@@ -194,310 +103,371 @@ const char *WeatherService::getAQIDesc(int aqi) {
   }
 }
 
-bool WeatherService::lookupCoordinates(String cityName, float &lat, float &lon,
-                                       String &resolvedName, String apiKey) {
+// ---------------------------------------------------------------------------
+// Geocoding
+// ---------------------------------------------------------------------------
+
+bool WeatherService::lookupCoordinates(const String &cityName, float &lat,
+                                       float &lon, String &resolvedName,
+                                       const String &apiKey) {
   if (WiFi.status() != WL_CONNECTED)
     return false;
+  if (apiKey.length() > 0 &&
+      lookupCoordinatesOWM(cityName, lat, lon, resolvedName, apiKey))
+    return true;
+  return lookupCoordinatesOpenMeteo(cityName, lat, lon, resolvedName);
+}
 
+bool WeatherService::lookupCoordinatesOWM(const String &cityName, float &lat,
+                                          float &lon, String &resolvedName,
+                                          const String &apiKey) {
   WiFiClientSecure client;
-  client.setInsecure();
   HTTPClient http;
+  String url = "https://api.openweathermap.org/geo/1.0/direct?q=" +
+               NetUtils::urlEncode(cityName) + "&limit=1&appid=" + apiKey;
 
-  // URL Encode city name
-  String encodedCity = cityName;
-  encodedCity.replace(" ", "%20");
-
-  // OWM Geocoding
-  String url =
-      "https://api.openweathermap.org/geo/1.0/direct?q=" + encodedCity +
-      "&limit=1&appid=" + apiKey;
-
-  Serial.println("Geocoding city OWM: " + url);
-  http.begin(client, url);
-  http.useHTTP10(true);
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
-
-  int httpResponseCode = http.GET();
-  if (httpResponseCode > 0) {
-    StaticJsonDocument<4096> doc;
+  Serial.printf("Geocoding (OWM): %s\n", cityName.c_str());
+  bool ok = false;
+  if (httpsGet(http, client, url, 5000)) {
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
-
-    // Expecting an Array [ { "name": ... } ]
+    // Expecting an array: [ { "name": ..., "lat": ..., "lon": ... } ]
     if (!error && doc.is<JsonArray>() && doc.size() > 0) {
       JsonObject result = doc[0];
       lat = result["lat"];
       lon = result["lon"];
-      resolvedName = result["name"].as<String>();
-
-      Serial.printf("Resolved %s to %.4f, %.4f (%s)\n", cityName.c_str(), lat,
-                    lon, resolvedName.c_str());
-
-      http.end();
-      client.stop();
-      return true;
+      resolvedName = result["name"] | "";
+      ok = true;
+    } else {
+      Serial.printf("Geocoding (OWM) failed: %s\n",
+                    error ? error.c_str() : "no results");
     }
-
-    Serial.print("Geocoding failed/parsed error: ");
-    Serial.println(error.c_str());
-    http.end();
-    client.stop();
-    return false;
   }
-  Serial.printf("Geocoding HTTP Error: %d\n", httpResponseCode);
   http.end();
   client.stop();
-  return false;
+  if (ok)
+    Serial.printf("Resolved %s to %.4f, %.4f (%s)\n", cityName.c_str(), lat,
+                  lon, resolvedName.c_str());
+  return ok;
 }
 
-bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
-                                            float lon, String apiKey) {
+bool WeatherService::lookupCoordinatesOpenMeteo(const String &cityName,
+                                                float &lat, float &lon,
+                                                String &resolvedName) {
+  // Open-Meteo has no "City,CC" syntax; split off a country code if present.
+  String name = cityName;
+  String country;
+  int comma = cityName.indexOf(',');
+  if (comma >= 0) {
+    name = cityName.substring(0, comma);
+    country = cityName.substring(comma + 1);
+    name.trim();
+    country.trim();
+  }
+
   WiFiClientSecure client;
-  client.setInsecure();
   HTTPClient http;
+  String url = "https://geocoding-api.open-meteo.com/v1/search?name=" +
+               NetUtils::urlEncode(name) + "&count=1&language=en&format=json";
+  if (country.length() == 2)
+    url += "&countryCode=" + country;
 
-  // 5 Day / 3 Hour Forecast
-  String url =
-      "https://api.openweathermap.org/data/2.5/forecast?lat=" + String(lat) +
-      "&lon=" + String(lon) + "&appid=" + apiKey + "&units=metric";
-
-  Serial.println("Fetching OWM Forecast 5Day: " + url);
-  http.begin(client, url);
-  http.setConnectTimeout(6000);
-  http.setTimeout(6000);
-
-  int code = http.GET();
-  if (code > 0) {
+  Serial.printf("Geocoding (Open-Meteo): %s\n", cityName.c_str());
+  bool ok = false;
+  if (httpsGet(http, client, url, 5000)) {
+    JsonDocument filter;
+    filter["results"][0]["name"] = true;
+    filter["results"][0]["latitude"] = true;
+    filter["results"][0]["longitude"] = true;
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, http.getStream());
-
-    if (!error) {
-      JsonArray list = doc["list"];
-      if (list.size() > 0) {
-
-        // 1. Fill Hourly (actually 3-hour steps) - Take first 24 items (72h
-        // coverage)
-        for (int i = 0; i < 24 && i < list.size(); i++) {
-          JsonObject item = list[i];
-          data.hourly[i].temp = item["main"]["temp"];
-          String dt_txt = item["dt_txt"].as<String>();
-          data.hourly[i].time = dt_txt; // "YYYY-MM-DD HH:MM:SS"
-
-          float pop = item["pop"]; // 0..1
-          data.hourly[i].pop = pop;
-
-          // Map Icon
-          String icon = item["weather"][0]["icon"].as<String>();
-          int wmo = 3;
-          if (icon.startsWith("01"))
-            wmo = 0;
-          else if (icon.startsWith("02"))
-            wmo = 1;
-          else if (icon.startsWith("03"))
-            wmo = 2;
-          else if (icon.startsWith("04"))
-            wmo = 3;
-          else if (icon.startsWith("09"))
-            wmo = 80;
-          else if (icon.startsWith("10"))
-            wmo = 61;
-          else if (icon.startsWith("11"))
-            wmo = 95;
-          else if (icon.startsWith("13"))
-            wmo = 71;
-          else if (icon.startsWith("50"))
-            wmo = 45;
-          data.hourly[i].weatherCode = wmo;
-        }
-
-        // Current Rain Prob Proxy (use first forecast slot)
-        data.currentRainProb = data.hourly[0].pop;
-
-        // 2. Fill Daily (Aggregate by Day) - Use "Midday Rule" & Max POP
-        int dayIndex = 0;
-        String currentDay = "";
-        float dayMin = 100, dayMax = -100;
-        float dayPopMax = 0;
-        int middayIconCode = 3;
-        int middayDiff = 9999;
-
-        for (JsonObject item : list) {
-          String dt_txt = item["dt_txt"].as<String>();
-          String dayStr = dt_txt.substring(0, 10);   // YYYY-MM-DD
-          String timeStr = dt_txt.substring(11, 16); // HH:MM
-          int hour = timeStr.substring(0, 2).toInt();
-
-          if (currentDay == "")
-            currentDay = dayStr;
-
-          if (dayStr != currentDay) {
-            // Commit previous day
-            if (dayIndex < 7) {
-              data.daily[dayIndex].date = currentDay;
-              data.daily[dayIndex].maxTemp = dayMax;
-              data.daily[dayIndex].minTemp = dayMin;
-              data.daily[dayIndex].weatherCode = middayIconCode;
-              data.daily[dayIndex].pop = dayPopMax;
-
-              int y, m, d;
-              if (sscanf(currentDay.c_str(), "%d-%d-%d", &y, &m, &d) == 3) {
-                data.daily[dayIndex].moonPhaseIndex =
-                    calculateMoonPhase(y, m, d);
-              }
-
-              dayIndex++;
-            }
-            // Reset for new day
-            currentDay = dayStr;
-            dayMin = 100;
-            dayMax = -100;
-            dayPopMax = 0;
-            middayDiff = 9999;
-            middayIconCode = 3;
-          }
-
-          // Stats
-          float t = item["main"]["temp"];
-          if (t < dayMin)
-            dayMin = t;
-          if (t > dayMax)
-            dayMax = t;
-
-          float p = item["pop"];
-          if (p > dayPopMax)
-            dayPopMax = p;
-
-          // Icon Selection (Midday Rule)
-          int diff = abs(hour - 12);
-          if (diff < middayDiff) {
-            middayDiff = diff;
-            String icon = item["weather"][0]["icon"].as<String>();
-            int wmo = 3;
-            if (icon.startsWith("01"))
-              wmo = 0;
-            else if (icon.startsWith("02"))
-              wmo = 1;
-            else if (icon.startsWith("03"))
-              wmo = 2;
-            else if (icon.startsWith("04"))
-              wmo = 3;
-            else if (icon.startsWith("09"))
-              wmo = 80;
-            else if (icon.startsWith("10"))
-              wmo = 61;
-            else if (icon.startsWith("11"))
-              wmo = 95;
-            else if (icon.startsWith("13"))
-              wmo = 71;
-            else if (icon.startsWith("50"))
-              wmo = 45;
-            middayIconCode = wmo;
-          }
-        }
-
-        // Commit last day
-        if (dayIndex < 7) {
-          data.daily[dayIndex].date = currentDay;
-          data.daily[dayIndex].maxTemp = dayMax;
-          data.daily[dayIndex].minTemp = dayMin;
-          data.daily[dayIndex].weatherCode = middayIconCode;
-          data.daily[dayIndex].pop = dayPopMax;
-
-          int y, m, d;
-          if (sscanf(currentDay.c_str(), "%d-%d-%d", &y, &m, &d) == 3) {
-            data.daily[dayIndex].moonPhaseIndex = calculateMoonPhase(y, m, d);
-          }
-        }
-        // Set current moon phase from today's forecast
-        if (dayIndex > 0 || (dayIndex == 0 && currentDay != "")) {
-          data.currentMoonPhase = data.daily[0].moonPhaseIndex;
-        }
-
-        Serial.println("OWM Forecast 5Day Success");
-        http.end();
-        client.stop();
-        return true;
-      }
+    DeserializationError error = deserializeJson(
+        doc, http.getStream(), DeserializationOption::Filter(filter));
+    JsonArray results = doc["results"];
+    if (!error && results.size() > 0) {
+      lat = results[0]["latitude"];
+      lon = results[0]["longitude"];
+      resolvedName = results[0]["name"] | "";
+      ok = true;
     } else {
-      Serial.print("OWM Forecast JSON Error: ");
-      Serial.println(error.c_str());
+      Serial.printf("Geocoding (Open-Meteo) failed: %s\n",
+                    error ? error.c_str() : "no results");
     }
-  } else {
-    Serial.printf("OWM Forecast HTTP Error: %d\n", code);
   }
   http.end();
   client.stop();
-  return false;
+  if (ok)
+    Serial.printf("Resolved %s to %.4f, %.4f (%s)\n", cityName.c_str(), lat,
+                  lon, resolvedName.c_str());
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Open-Meteo (keyless fallback)
+// ---------------------------------------------------------------------------
+
+bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
+                                             float lon) {
+  WiFiClientSecure client;
+  HTTPClient http;
+  String url =
+      "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat, 4) +
+      "&longitude=" + String(lon, 4) +
+      "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
+      "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day"
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
+      "precipitation_probability_max"
+      "&hourly=temperature_2m,weather_code,precipitation_probability"
+      "&timezone=auto&past_days=1";
+
+  Serial.println("Fetching Open-Meteo: " + url);
+  bool ok = false;
+  if (httpsGet(http, client, url, 5000)) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, http.getStream());
+    if (error) {
+      Serial.print("Deserialize Open-Meteo failed: ");
+      Serial.println(error.c_str());
+    } else if (doc["current"].is<JsonObject>()) {
+      ok = true;
+      data.hourlyStepHours = 1;
+
+      JsonObject current = doc["current"];
+      data.currentTemp = current["temperature_2m"];
+      data.currentHumidity = current["relative_humidity_2m"];
+      data.currentPressure = current["pressure_msl"];
+      data.currentFeelsLike = current["apparent_temperature"];
+      data.currentWeatherCode = current["weather_code"] | -1;
+      data.windSpeed = current["wind_speed_10m"];
+      data.windDirection = current["wind_direction_10m"];
+      data.isNight = (current["is_day"] | 1) == 0;
+
+      // Daily: index 0 is yesterday (past_days=1), so shift by one.
+      JsonArray dayTimes = doc["daily"]["time"];
+      for (int i = 0; i < 7; i++) {
+        int jsonIdx = i + 1;
+        if (jsonIdx >= (int)dayTimes.size())
+          break;
+        data.daily[i].date = dayTimes[jsonIdx].as<String>();
+        data.daily[i].maxTemp = doc["daily"]["temperature_2m_max"][jsonIdx];
+        data.daily[i].minTemp = doc["daily"]["temperature_2m_min"][jsonIdx];
+        data.daily[i].weatherCode =
+            doc["daily"]["weather_code"][jsonIdx] | -1;
+        data.daily[i].pop =
+            (doc["daily"]["precipitation_probability_max"][jsonIdx] | 0) /
+            100.0f;
+      }
+
+      // Hourly: yesterday occupies 0..23, today starts at 24. Skip the hours
+      // already past *in the city's own time zone*, not the device's.
+      JsonArray h_time = doc["hourly"]["time"];
+      int startIdx = 24;
+      long offset = doc["utc_offset_seconds"] | 0L;
+      struct tm local;
+      if (clockIsSet()) {
+        toCityLocal(time(nullptr), offset, local);
+        startIdx = 24 + local.tm_hour;
+      } else if (getLocalTime(&local, 10)) {
+        startIdx = 24 + local.tm_hour;
+      }
+
+      for (int i = 0; i < 24; i++) {
+        int idx = startIdx + i;
+        if (idx >= (int)h_time.size())
+          break;
+        // "YYYY-MM-DDTHH:MM" -> "YYYY-MM-DD HH:MM"
+        String t = h_time[idx].as<String>();
+        t.replace("T", " ");
+        data.hourly[i].time = t;
+        data.hourly[i].temp = doc["hourly"]["temperature_2m"][idx];
+        data.hourly[i].weatherCode = doc["hourly"]["weather_code"][idx] | -1;
+        data.hourly[i].pop =
+            (doc["hourly"]["precipitation_probability"][idx] | 0) / 100.0f;
+      }
+      data.currentRainProb = data.hourly[0].pop;
+    } else {
+      Serial.println("Open-Meteo: unexpected response");
+    }
+  }
+  http.end();
+  client.stop();
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// OpenWeatherMap
+// ---------------------------------------------------------------------------
+
+bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
+                                            float lon, const String &apiKey) {
+  WiFiClientSecure client;
+  HTTPClient http;
+  String url = "https://api.openweathermap.org/data/2.5/forecast?lat=" +
+               String(lat, 4) + "&lon=" + String(lon, 4) + "&appid=" + apiKey +
+               "&units=metric";
+
+  Serial.printf("Fetching OWM Forecast 5Day: %.4f, %.4f\n", lat, lon);
+  bool ok = false;
+  if (httpsGet(http, client, url, 6000)) {
+    // The full response is large; keep only the fields we use.
+    JsonDocument filter;
+    JsonObject f = filter["list"].add<JsonObject>();
+    f["dt"] = true;
+    f["main"]["temp"] = true;
+    f["main"]["feels_like"] = true;
+    f["main"]["humidity"] = true;
+    f["main"]["pressure"] = true;
+    f["pop"] = true;
+    f["weather"][0]["icon"] = true;
+    f["wind"]["speed"] = true;
+    f["wind"]["deg"] = true;
+    filter["city"]["timezone"] = true;
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(
+        doc, http.getStream(), DeserializationOption::Filter(filter));
+    JsonArray list = doc["list"];
+
+    if (error) {
+      Serial.print("OWM Forecast JSON Error: ");
+      Serial.println(error.c_str());
+    } else if (list.size() > 0) {
+      ok = true;
+      data.hourlyStepHours = 3;
+      long tzOffset = doc["city"]["timezone"] | 0L;
+
+      // 1. "Hourly" list (3-hour steps). Times are converted to city-local.
+      for (int i = 0; i < 24 && i < (int)list.size(); i++) {
+        JsonObject item = list[i];
+        struct tm local;
+        toCityLocal(item["dt"].as<long>(), tzOffset, local);
+        char buf[20];
+        strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &local);
+        data.hourly[i].time = buf;
+        data.hourly[i].temp = item["main"]["temp"];
+        data.hourly[i].pop = item["pop"];
+        data.hourly[i].weatherCode =
+            owmIconToWmo(item["weather"][0]["icon"] | "");
+      }
+      data.currentRainProb = data.hourly[0].pop;
+
+      // Provisional current conditions from the nearest slot, so the screen
+      // is sensible even if the "current weather" call fails afterwards.
+      JsonObject first = list[0];
+      const char *firstIcon = first["weather"][0]["icon"] | "";
+      data.currentTemp = first["main"]["temp"];
+      data.currentFeelsLike = first["main"]["feels_like"];
+      data.currentHumidity = first["main"]["humidity"];
+      data.currentPressure = first["main"]["pressure"];
+      data.windSpeed = first["wind"]["speed"].as<float>() * 3.6f; // m/s->km/h
+      data.windDirection = first["wind"]["deg"];
+      data.currentWeatherCode = owmIconToWmo(firstIcon);
+      data.isNight = isNightIcon(firstIcon);
+
+      // 2. Daily aggregation by city-local date: min/max temp, max POP and
+      //    the icon closest to midday.
+      int dayIndex = -1;
+      char currentDay[11] = "";
+      int middayDiff = 9999;
+
+      for (JsonObject item : list) {
+        struct tm local;
+        toCityLocal(item["dt"].as<long>(), tzOffset, local);
+        char dayStr[11];
+        strftime(dayStr, sizeof(dayStr), "%Y-%m-%d", &local);
+
+        if (strcmp(dayStr, currentDay) != 0) {
+          if (dayIndex + 1 >= 7)
+            break;
+          dayIndex++;
+          strcpy(currentDay, dayStr);
+          DailyForecast &d = data.daily[dayIndex];
+          d.date = dayStr;
+          d.minTemp = 100;
+          d.maxTemp = -100;
+          d.pop = 0;
+          middayDiff = 9999;
+        }
+
+        DailyForecast &d = data.daily[dayIndex];
+        float t = item["main"]["temp"];
+        if (t < d.minTemp)
+          d.minTemp = t;
+        if (t > d.maxTemp)
+          d.maxTemp = t;
+        float p = item["pop"];
+        if (p > d.pop)
+          d.pop = p;
+
+        int diff = abs(local.tm_hour - 12);
+        if (diff < middayDiff) {
+          middayDiff = diff;
+          d.weatherCode = owmIconToWmo(item["weather"][0]["icon"] | "");
+        }
+      }
+      Serial.println("OWM Forecast 5Day Success");
+    }
+  }
+  http.end();
+  client.stop();
+  return ok;
 }
 
 bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
-                                             float lon, String apiKey) {
+                                             float lon, const String &apiKey) {
   WiFiClientSecure client;
-  client.setInsecure();
   HTTPClient http;
+  String url = "https://api.openweathermap.org/data/2.5/weather?lat=" +
+               String(lat, 4) + "&lon=" + String(lon, 4) + "&appid=" + apiKey +
+               "&units=metric";
 
-  String url =
-      "https://api.openweathermap.org/data/2.5/weather?lat=" + String(lat) +
-      "&lon=" + String(lon) + "&appid=" + apiKey + "&units=metric";
-
-  Serial.println("Fetching OWM Current: " + url);
-  http.begin(client, url);  http.useHTTP10(true);  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
-
-  int code = http.GET();
-  if (code > 0) {
+  Serial.printf("Fetching OWM Current: %.4f, %.4f\n", lat, lon);
+  bool ok = false;
+  if (httpsGet(http, client, url, 5000)) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
-    if (!error) {
-      if (doc.containsKey("main")) {
-        // Overwrite Data
-        data.currentTemp = doc["main"]["temp"];
-        data.currentHumidity = doc["main"]["humidity"];
-        data.currentPressure = doc["main"]["pressure"];
-        data.currentFeelsLike = doc["main"]["feels_like"];
-        data.windSpeed = doc["wind"]["speed"]; // m/s
-        data.windSpeed *= 3.6;                 // Convert to km/h
-        data.windDirection = doc["wind"]["deg"];
-
-        // Icon Mapping
-        String icon = doc["weather"][0]["icon"].as<String>();
-        data.isNight = icon.endsWith("n");
-        int wmo = 3; // Default Overcast
-
-        if (icon.startsWith("01"))
-          wmo = 0; // Clear
-        else if (icon.startsWith("02"))
-          wmo = 1; // Few Clouds
-        else if (icon.startsWith("03"))
-          wmo = 2; // Scattered
-        else if (icon.startsWith("04"))
-          wmo = 3; // Broken
-        else if (icon.startsWith("09"))
-          wmo = 80; // Shower Rain
-        else if (icon.startsWith("10"))
-          wmo = 61; // Rain
-        else if (icon.startsWith("11"))
-          wmo = 95; // Thunder
-        else if (icon.startsWith("13"))
-          wmo = 71; // Snow
-        else if (icon.startsWith("50"))
-          wmo = 45; // Mist
-
-        data.currentWeatherCode = wmo;
-        Serial.printf("OWM Update Success: Temp=%.1f Icon=%s WMO=%d\n",
-                      data.currentTemp, icon.c_str(), wmo);
-        http.end();
-        client.stop();
-        return true;
-      }
-    } else {
+    if (error) {
       Serial.print("OWM JSON Error: ");
       Serial.println(error.c_str());
+    } else if (doc["main"].is<JsonObject>()) {
+      data.currentTemp = doc["main"]["temp"];
+      data.currentHumidity = doc["main"]["humidity"];
+      data.currentPressure = doc["main"]["pressure"];
+      data.currentFeelsLike = doc["main"]["feels_like"];
+      data.windSpeed = doc["wind"]["speed"].as<float>() * 3.6f; // m/s->km/h
+      data.windDirection = doc["wind"]["deg"];
+
+      const char *icon = doc["weather"][0]["icon"] | "";
+      data.isNight = isNightIcon(icon);
+      data.currentWeatherCode = owmIconToWmo(icon);
+      Serial.printf("OWM Update Success: Temp=%.1f Icon=%s WMO=%d\n",
+                    data.currentTemp, icon, data.currentWeatherCode);
+      ok = true;
     }
-  } else {
-    Serial.printf("OWM HTTP Error: %d\n", code);
   }
   http.end();
   client.stop();
-  return false;
+  return ok;
+}
+
+void WeatherService::updateAirQualityOWM(WeatherData &data, float lat,
+                                         float lon, const String &apiKey) {
+  WiFiClientSecure client;
+  HTTPClient http;
+  String url = "https://api.openweathermap.org/data/2.5/air_pollution?lat=" +
+               String(lat, 4) + "&lon=" + String(lon, 4) + "&appid=" + apiKey;
+
+  Serial.printf("Fetching AQI OWM: %.4f, %.4f\n", lat, lon);
+  if (httpsGet(http, client, url, 5000)) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, http.getStream());
+    if (!error) {
+      // "list": [{ "main": { "aqi": 1 }, ... }] — 1 (Good) .. 5 (Very Poor)
+      data.currentAQI = doc["list"][0]["main"]["aqi"] | 0;
+    } else {
+      Serial.print("AQI Parse Error: ");
+      Serial.println(error.c_str());
+    }
+  }
+  http.end();
+  client.stop();
 }

@@ -1,6 +1,6 @@
 # ESP32 Weather & Bus Clock (CYD)
 
-A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Yellow Display). It shows real-time weather from OpenWeatherMap, TMB (Transports Metropolitans de Barcelona) bus arrival times, and Stock/Crypto prices.
+A smart desktop display for Barcelona, built on the **ESP32-2432S024C** (Cheap Yellow Display). It shows real-time weather from OpenWeatherMap (or keyless Open-Meteo), TMB (Transports Metropolitans de Barcelona) bus arrival times, and Stock/Crypto prices.
 
 ## 🎮 Controls & Navigation
 
@@ -12,16 +12,16 @@ The interface relies on intuitive **Touch Gestures**:
 | **Switch Page** | **Swipe LEFT / RIGHT** | **Weather**: Next/Prev City |
 | **Switch Station**| **Tap Screen (Bus)** | **Bus**: Next Bus Stop |
 | **Toggle View** | **Tap Screen (Weather)** | **Weather**: Cycle Views (Current → Hourly → Daily) |
-| **Refresh Data** | **Auto / Swipe / Tap** | **Bus**: Auto-refreshes on entry, on tap, & every 60s <br> **Stock**: 5 min <br> **Weather**: 10 min |
+| **Refresh Data** | **Auto / Swipe / Tap** | **Bus**: Auto-refreshes on entry, on tap, & every 60s <br> **Stock**: 5 min <br> **Weather**: 15 min (10 min when switching city) |
 
 ## ✨ Features (Polished)
 
 1.  **Multi-City Weather**:
-    *   **Source**: OpenWeatherMap (5-Day / 3-Hour Forecast API).
+    *   **Source**: OpenWeatherMap (5-Day / 3-Hour Forecast API) when an OWM key is set; otherwise Open-Meteo (no key needed, hourly data). Failed fetches back off (30s up to 15 min) instead of retrying every second.
     *   **Current**: Design-foward "Glassmorphism" card with Pills (Humidity, Wind, Pressure, AQI).
     *   **Rain Probability**: Shown in blue appended to description (e.g., "Overcast 30%") and in forecast lists.
     *   **Hourly**: Scrollable list of 24h forecast.
-    *   **Daily**: 7-Day forecast with high/low temps and mid-day icons.
+    *   **Daily**: Daily forecast with high/low temps and mid-day icons (~6 days with OWM, 7 with Open-Meteo).
 2.  **TMB Bus Tracker**:
     *   **Real-time Arrivals**: Shows minutes/seconds remaining.
     *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen or tapping to switch stations.
@@ -63,15 +63,16 @@ No need to edit code! Configure everything via the web interface.
     -   Find the device IP in the Serial Monitor (e.g., `192.168.1.45`).
     -   Open that IP in your browser.
 3.  **Customize**:
-    -   **City & Bus Stop**: Set your location (comma-separated for multiple cities/stops).
-    -   **Stocks**: Comma-separated symbols (e.g., `AAPL,BINANCE:BTCUSDT`).
+    -   **City & Bus Stop**: Set your location (comma-separated for multiple cities/stops, max 5 each). To add a country code, separate cities with `;` instead, e.g. `Paris,FR;London,GB`.
+    -   **Stocks**: Comma-separated Yahoo Finance symbols (e.g., `AAPL,BTC-USD,GRF.MC`).
     -   **Lighting**:
         -   **Day Brightness**: Slider (1-100%) for active hours.
         -   **Night Brightness**: Slider (1-100%) for night mode.
         -   **Night Mode**: Enable auto-dimming between specific hours.
     -   **Timezone**: Select your local time.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
-    -   **API Keys**: Enter your TMB App ID/Key and OpenWeatherMap API Key.
+    -   **API Keys**: Enter your TMB App ID/Key and (optionally) OpenWeatherMap API Key. Without an OWM key, weather comes from Open-Meteo and AQI is not shown.
+    -   **Settings Password** (optional): Protects this page with HTTP basic auth (user `admin`).
 
 ## Controls
 -   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).
@@ -85,7 +86,7 @@ No need to edit code! Configure everything via the web interface.
 
 ## Recent Updates
 -   **NVS Optimization**: Reduced flash memory wear by caching API credentials in RAM instead of reading NVS every 60 seconds.
--   **OpenWeatherMap Migration**: Fully replaced Open-Meteo for Forecasts, Geocoding, and AQI for better accuracy.
+-   **OpenWeatherMap**: Preferred source for forecasts, geocoding and AQI when a key is configured; Open-Meteo is the keyless fallback.
 -   **Enhanced Rain UI**: Rain probability now displayed alongside weather description and in forecast lists.
 -   **Configurable Backlight**: Set specific brightness levels for Day and Night modes via Web UI.
 -   **Touch Navigation**: Simplified Bus Station switching via tap.
@@ -94,7 +95,7 @@ No need to edit code! Configure everything via the web interface.
 
 You need free API keys for data sources:
 -   **TMB API**: Register at [developer.tmb.cat](https://developer.tmb.cat/) (Bus Data).
--   **OpenWeatherMap**: Register at [openweathermap.org](https://openweathermap.org/) (Weather Data).
+-   **OpenWeatherMap**: Register at [openweathermap.org](https://openweathermap.org/) (Optional: better forecasts + AQI).
 
 ## Project Structure
 
@@ -102,7 +103,7 @@ You need free API keys for data sources:
 -   `lib/GuiController`: LVGL UI logic, screens, and rendering.
 -   `lib/NetworkManager`: WiFi, NTP, NVS Storage, and Web Server.
 -   `lib/BusService`: TMB API client.
--   `lib/StockService`: Finnhub API client.
+-   `lib/StockService`: Yahoo Finance client.
 -   `lib/WeatherService`: OpenWeatherMap API client.
 -   `lib/LedController`: RGB LED management and alerts.
 -   `lib/TouchDrv`: Driver for CST820/CST816S touch controller.

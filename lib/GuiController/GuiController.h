@@ -17,7 +17,6 @@
 class GuiController {
 public:
   static void init();
-  static void handle(uint32_t ms);
 
   // These now delegate to Views
   static void showWeatherScreen(const WeatherData &data, int anim = -1);
@@ -48,8 +47,7 @@ public:
   static std::atomic<bool> busStationChanged;
   static int getBusIndex();
   static void setBusStopCount(int count);
-  static bool hasBusStationChanged();
-  static void clearBusStationChanged();
+  static bool consumeBusStationChanged(); // Returns and clears the flag
 
   // Multi-City Support
   static std::atomic<int> currentCityIndex;
@@ -57,8 +55,7 @@ public:
   static std::atomic<bool> cityChanged;
   static int getCityIndex();
   static void setCityCount(int count);
-  static bool hasCityChanged();
-  static void clearCityChanged();
+  static bool consumeCityChanged(); // Returns and clears the flag
 
   // Public Callbacks for Views
   static void handleGesture(lv_event_t *e);
