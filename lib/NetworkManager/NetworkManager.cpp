@@ -123,177 +123,290 @@ bool NetworkManager::checkAuth() {
   return false;
 }
 
+// --- Settings page ---------------------------------------------------------
+
+// Same look as the device: black, white values, light grey labels, hairline
+// section dividers, one accent colour (rain blue) for controls.
+static const char PAGE_HEAD[] = R"HTML(<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weather Clock</title><style>
+:root{color-scheme:dark}
+body{margin:0;background:#000;color:#fff;font:16px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:16px 16px 104px}
+h1{font-size:24px;font-weight:600;margin:8px 0 2px}
+.sub{margin:0;color:#c8c8c8;font-size:14px}
+section{border-top:1px solid #666;margin-top:22px;padding-top:12px}
+h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#c8c8c8;margin:0 0 4px}
+label{display:block;margin:14px 0 6px;color:#c8c8c8;font-size:14px}
+.hint{color:#9a9a9a;font-size:13px;margin-top:6px}
+input[type=text],input[type=password],input[type=number],select{width:100%;box-sizing:border-box;background:#111;color:#fff;border:1px solid #555;border-radius:10px;padding:11px 12px;font:inherit}
+input:focus,select:focus{outline:none;border-color:#44bbff}
+input[type=range]{width:100%;accent-color:#44bbff;margin:4px 0}
+.row{display:flex;gap:12px}.row>div{flex:1;min-width:0}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px;color:#fff;font-size:16px}
+.check input{width:20px;height:20px;accent-color:#44bbff;margin:0}
+.val{float:right;color:#fff}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:10px 0 0;font-size:14px}
+dt{color:#c8c8c8}dd{margin:0;font-variant-numeric:tabular-nums}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#000;border-top:1px solid #666;padding:12px 16px}
+.bar button{display:block;width:100%;max-width:480px;margin:0 auto;padding:14px;border:0;border-radius:12px;background:#44bbff;color:#000;font:600 16px system-ui,sans-serif}
+.msg{text-align:center;padding-top:30vh}
+</style></head><body><main>
+)HTML";
+
+static const char PAGE_TAIL[] = R"HTML(</main>
+<div class="bar"><button type="submit" form="f">Save and restart</button></div>
+<script>
+document.querySelectorAll('input[type=range]').forEach(function(r){
+  var o=document.getElementById(r.name+'Val');
+  var u=function(){o.textContent=r.value+'%';};
+  r.addEventListener('input',u);u();
+});
+</script></body></html>)HTML";
+
+static const struct {
+  const char *name;
+  const char *val;
+} TIMEZONES[] = {
+    // Africa
+    {"Africa/Cairo (EET)", "EET-2EEST,M4.5.3/0,M10.5.4/24"},
+    {"Africa/Johannesburg (SAST)", "SAST-2"},
+    {"Africa/Lagos (WAT)", "WAT-1"},
+    // Americas
+    {"America/Anchorage (AKST)", "AKST9AKDT,M3.2.0,M11.1.0"},
+    {"America/Argentina/Buenos_Aires (ART)", "ART3"},
+    {"America/Bogota (COT)", "COT5"},
+    {"America/Chicago (CST)", "CST6CDT,M3.2.0,M11.1.0"},
+    {"America/Denver (MST)", "MST7MDT,M3.2.0,M11.1.0"},
+    {"America/Los_Angeles (PST)", "PST8PDT,M3.2.0,M11.1.0"},
+    {"America/Mexico_City (CST)", "CST6"},
+    {"America/New_York (EST)", "EST5EDT,M3.2.0,M11.1.0"},
+    {"America/Phoenix (MST)", "MST7"},
+    {"America/Sao_Paulo (BRT)", "BRT3"},
+    {"America/Toronto (EST)", "EST5EDT,M3.2.0,M11.1.0"},
+    {"America/Vancouver (PST)", "PST8PDT,M3.2.0,M11.1.0"},
+    // Asia
+    {"Asia/Bangkok (ICT)", "ICT-7"},
+    {"Asia/Dubai (GST)", "GST-4"},
+    {"Asia/Hong_Kong (HKT)", "HKT-8"},
+    {"Asia/Jakarta (WIB)", "WIB-7"},
+    {"Asia/Jerusalem (IST)", "IST-2IDT,M3.4.4/26,M10.5.0"},
+    {"Asia/Kolkata (IST)", "IST-5:30"},
+    {"Asia/Seoul (KST)", "KST-9"},
+    {"Asia/Shanghai (CST)", "CST-8"},
+    {"Asia/Singapore (SGT)", "SGT-8"},
+    {"Asia/Tokyo (JST)", "JST-9"},
+    // Europe
+    {"Europe/Amsterdam (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Athens (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+    {"Europe/Berlin (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Brussels (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Helsinki (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+    {"Europe/Istanbul (TRT)", "TRT-3"},
+    {"Europe/Kyiv (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+    {"Europe/Lisbon (WET)", "WET0WEST,M3.5.0/1,M10.5.0"},
+    {"Europe/London (GMT)", "GMT0BST,M3.5.0/1,M10.5.0"},
+    {"Europe/Madrid (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Moscow (MSK)", "MSK-3"},
+    {"Europe/Paris (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Rome (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Stockholm (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Zurich (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
+    // Pacific
+    {"Pacific/Auckland (NZST)", "NZST-12NZDT,M9.5.0/2,M4.1.0/3"},
+    {"Pacific/Fiji (FJT)", "FJT-12"},
+    {"Pacific/Honolulu (HST)", "HST10"},
+    {"Australia/Sydney (AEST)", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
+    {"Australia/Perth (AWST)", "AWST-8"},
+    // UTC
+    {"UTC", "GMT0"},
+};
+
+// Sends the page in ~1KB chunks instead of building it as one big String
+// on the network task's heap.
+class ChunkedPage {
+public:
+  explicit ChunkedPage(WebServer &s) : server(s) {
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text/html; charset=utf-8", "");
+    buf.reserve(1280);
+  }
+  void add(const char *s) {
+    buf += s;
+    flushIfFull();
+  }
+  void add(const String &s) {
+    buf += s;
+    flushIfFull();
+  }
+  void end() {
+    if (buf.length())
+      server.sendContent(buf);
+    server.sendContent(""); // Terminating chunk
+  }
+
+private:
+  void flushIfFull() {
+    if (buf.length() >= 1024) {
+      server.sendContent(buf);
+      buf = "";
+    }
+  }
+  WebServer &server;
+  String buf;
+};
+
 void NetworkManager::handleRoot() {
   if (!checkAuth())
     return;
   using NetUtils::htmlEscape;
 
-  String html = "<html><head><title>Weather Clock Settings</title>";
-  html +=
-      "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-  html += "<style>body{font-family:sans-serif;max-width:500px;margin:20 "
-          "auto;padding:20px;background:#1a1a1a;color:white;}";
-  html += "input{width:100%;padding:10px;margin:5px 0;box-sizing:border-box;}";
-  html += "input[type=submit]{background:#007bff;color:white;border:none;"
-          "cursor:pointer;}";
-  html += "h2{border-bottom:1px solid #444;padding-bottom:10px;}";
-  html += "</style></head><body>";
-  html += "<h2>Device Config</h2>";
-  html += "<form action='/save' method='POST'>";
+  ChunkedPage page(server);
+  page.add(PAGE_HEAD);
 
-  // Current values
-  String appId = getAppId();
-  String appKey = getAppKey();
+  page.add("<h1>Weather Clock</h1><p class=\"sub\">");
+  page.add(WiFi.localIP().toString());
+  page.add(" &middot; ");
+  page.add(OTA_HOSTNAME);
+  page.add(".local</p><form id=\"f\" method=\"post\" action=\"/save\">");
 
-  html += "City Names (comma separated, or use ; to add a country code, e.g. "
-          "Paris,FR;London,GB):<br><input type='text' name='city' value='" +
-          htmlEscape(city) + "'><br>";
-  html += "Bus Stop IDs (comma separated):<br><input type='text' "
-          "name='busStop' value='" +
-          htmlEscape(busStop) + "'><br>";
-  html += "TMB App ID:<br><input type='text' name='appId' value='" +
-          htmlEscape(appId) + "'><br>";
-  html += "TMB App Key:<br><input type='password' name='appKey' value='" +
-          htmlEscape(appKey) + "'><br>";
-  html += "OWM API Key (Optional, enables AQI and OWM forecasts):<br><input "
-          "type='password' name='owmApiKey' value='" +
-          htmlEscape(owmApiKey) + "'><br>";
-  html += String("Settings &amp; OTA Password (") +
-          (webPassword.length() > 0 ? "currently SET" : "currently NOT set") +
-          "; user 'admin'; leave blank to keep):"
-          "<br><input type='password' name='webPassword' value=''><br>";
-  if (webPassword.length() > 0)
-    html += "<label><input type='checkbox' name='clearWebPassword' "
-            "style='width:auto'> Remove password</label><br>";
-  html += "<br>";
-
-  // Improvements
-  html += "<h3>Lighting</h3>";
-
-  // Brightness Sliders
-  html += "Day Brightness (" + String(dayBrightness) + "%):<br>";
-  html += "<input type='range' name='dayBrightness' min='1' max='100' value='" +
-          String(dayBrightness) + "'><br>";
-
-  html += "Night Brightness (" + String(nightBrightness) + "%):<br>";
-  html +=
-      "<input type='range' name='nightBrightness' min='1' max='100' value='" +
-      String(nightBrightness) + "'><br><br>";
-
-  html += "Timezone:<br><select name='timezone'>";
-
-  struct TZ {
-    const char *name;
-    const char *val;
+  auto section = [&](const char *title) {
+    page.add("<section><h2>");
+    page.add(title);
+    page.add("</h2>");
   };
-  TZ timezones[] = {
-      // Africa
-      {"Africa/Cairo (EET)", "EET-2EEST,M4.5.3/0,M10.5.4/24"},
-      {"Africa/Johannesburg (SAST)", "SAST-2"},
-      {"Africa/Lagos (WAT)", "WAT-1"},
+  auto hint = [&](const char *text) {
+    page.add("<div class=\"hint\">");
+    page.add(text);
+    page.add("</div>");
+  };
+  // Text-like input; the value is escaped for the double-quoted attribute
+  auto input = [&](const char *label, const char *name, const String &value,
+                   const char *type, const char *extra) {
+    page.add("<label for=\"");
+    page.add(name);
+    page.add("\">");
+    page.add(label);
+    page.add("</label><input id=\"");
+    page.add(name);
+    page.add("\" name=\"");
+    page.add(name);
+    page.add("\" type=\"");
+    page.add(type);
+    page.add("\" value=\"");
+    page.add(htmlEscape(value));
+    page.add("\" autocomplete=\"off\" autocapitalize=\"off\" "
+             "spellcheck=\"false\" ");
+    page.add(extra);
+    page.add(">");
+  };
+  auto slider = [&](const char *label, const char *name, int value) {
+    page.add("<label>");
+    page.add(label);
+    page.add("<span class=\"val\" id=\"");
+    page.add(name);
+    page.add("Val\"></span></label><input type=\"range\" min=\"1\" "
+             "max=\"100\" name=\"");
+    page.add(name);
+    page.add("\" value=\"");
+    page.add(String(value));
+    page.add("\">");
+  };
 
-      // Americas
-      {"America/Anchorage (AKST)", "AKST9AKDT,M3.2.0,M11.1.0"},
-      {"America/Argentina/Buenos_Aires (ART)", "ART3"},
-      {"America/Bogota (COT)", "COT5"},
-      {"America/Chicago (CST)", "CST6CDT,M3.2.0,M11.1.0"},
-      {"America/Denver (MST)", "MST7MDT,M3.2.0,M11.1.0"},
-      {"America/Los_Angeles (PST)", "PST8PDT,M3.2.0,M11.1.0"},
-      {"America/Mexico_City (CST)", "CST6"},
-      {"America/New_York (EST)", "EST5EDT,M3.2.0,M11.1.0"},
-      {"America/Phoenix (MST)", "MST7"},
-      {"America/Sao_Paulo (BRT)", "BRT3"},
-      {"America/Toronto (EST)", "EST5EDT,M3.2.0,M11.1.0"},
-      {"America/Vancouver (PST)", "PST8PDT,M3.2.0,M11.1.0"},
+  section("Locations");
+  input("Cities", "city", city, "text", "");
+  hint("Up to 5, comma separated. To add a country code, separate with ; "
+       "instead: Paris,FR;London,GB");
+  input("Bus stops", "busStop", busStop, "text", "inputmode=\"numeric\"");
+  hint("TMB stop codes, up to 5, comma separated. Tap the bus screen to "
+       "switch.");
+  page.add("</section>");
 
-      // Asia
-      {"Asia/Bangkok (ICT)", "ICT-7"},
-      {"Asia/Dubai (GST)", "GST-4"},
-      {"Asia/Hong_Kong (HKT)", "HKT-8"},
-      {"Asia/Jakarta (WIB)", "WIB-7"},
-      {"Asia/Jerusalem (IST)", "IST-2IDT,M3.4.4/26,M10.5.0"},
-      {"Asia/Kolkata (IST)", "IST-5:30"},
-      {"Asia/Seoul (KST)", "KST-9"},
-      {"Asia/Shanghai (CST)", "CST-8"},
-      {"Asia/Singapore (SGT)", "SGT-8"},
-      {"Asia/Tokyo (JST)", "JST-9"},
+  section("Stocks");
+  input("Symbols", "stockSymbols", stockSymbols, "text", "");
+  hint("Yahoo Finance symbols, comma separated: AAPL,BTC-USD,GRF.MC");
+  page.add("</section>");
 
-      // Europe
-      {"Europe/Amsterdam (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Athens (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
-      {"Europe/Berlin (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Brussels (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Helsinki (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
-      {"Europe/Istanbul (TRT)", "TRT-3"},
-      {"Europe/Kyiv (EET)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
-      {"Europe/Lisbon (WET)", "WET0WEST,M3.5.0/1,M10.5.0"},
-      {"Europe/London (GMT)", "GMT0BST,M3.5.0/1,M10.5.0"},
-      {"Europe/Madrid (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Moscow (MSK)", "MSK-3"},
-      {"Europe/Paris (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Rome (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Stockholm (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-      {"Europe/Zurich (CET)", "CET-1CEST,M3.5.0,M10.5.0/3"},
-
-      // Pacific
-      {"Pacific/Auckland (NZST)", "NZST-12NZDT,M9.5.0/2,M4.1.0/3"},
-      {"Pacific/Fiji (FJT)", "FJT-12"},
-      {"Pacific/Honolulu (HST)", "HST10"},
-      {"Australia/Sydney (AEST)", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
-      {"Australia/Perth (AWST)", "AWST-8"},
-
-      // UTC
-      {"UTC", "GMT0"}};
-
-  for (const auto &tz : timezones) {
-    String selected = (String(tz.val) == timezone) ? " selected" : "";
-    html += "<option value='" + String(tz.val) + "'" + selected + ">" +
-            String(tz.name) + "</option>";
+  section("Display");
+  page.add("<label for=\"timezone\">Time zone</label>"
+           "<select id=\"timezone\" name=\"timezone\">");
+  for (const auto &tz : TIMEZONES) {
+    page.add("<option value=\"");
+    page.add(tz.val);
+    page.add(timezone == tz.val ? "\" selected>" : "\">");
+    page.add(tz.name);
+    page.add("</option>");
   }
-  html += "</select><br>";
-
-  String checked = nightMode ? "checked" : "";
-  html += "Night Mode (Auto-Dim): <input type='checkbox' name='nightMode' " +
-          checked + "><br>";
-
-  html += "Night Start (Hour 0-23):<br><input type='number' name='nightStart' "
-          "value='" +
-          String(nightStart) + "'><br>";
-  html +=
-      "Night End (Hour 0-23):<br><input type='number' name='nightEnd' value='" +
-      String(nightEnd) + "'><br><br>";
-
-  html += "<h3>Stock Ticker</h3>";
-  html += "Symbols (comma split):<br><input type='text' name='stockSymbols' "
-          "value='" +
-          htmlEscape(stockSymbols) + "'><br><br>";
-
-  html += "LED Brightness:<br><select name='ledBrightness'>";
-  String b_opts[] = {"low", "medium", "high"};
-  for (String o : b_opts) {
-    String sel = (o == ledBrightness) ? " selected" : "";
-    html += "<option value='" + o + "'" + sel + ">" + o + "</option>";
+  page.add("</select><label for=\"ledBrightness\">Status LED</label>"
+           "<select id=\"ledBrightness\" name=\"ledBrightness\">");
+  static const char *ledValues[] = {"low", "medium", "high"};
+  static const char *ledNames[] = {"Low", "Medium", "High"};
+  for (int i = 0; i < 3; i++) {
+    page.add("<option value=\"");
+    page.add(ledValues[i]);
+    page.add(ledBrightness == ledValues[i] ? "\" selected>" : "\">");
+    page.add(ledNames[i]);
+    page.add("</option>");
   }
-  html += "</select><br><br>";
+  page.add("</select>");
+  hint("Red: raining now. Orange: rain within ~2 h. Blue: rain later. "
+       "Green: dry.");
+  page.add("</section>");
 
-  html += "<input type='submit' value='Save & Reboot'></form>";
-  html += "<p>IP: " + WiFi.localIP().toString() + " &middot; " + OTA_HOSTNAME +
-          ".local</p>";
+  section("Night mode");
+  page.add("<label class=\"check\"><input type=\"checkbox\" "
+           "name=\"nightMode\"");
+  page.add(nightMode ? " checked" : "");
+  page.add(">Dim the screen at night</label><div class=\"row\"><div>");
+  input("From (hour)", "nightStart", String(nightStart), "number",
+        "min=\"0\" max=\"23\" inputmode=\"numeric\"");
+  page.add("</div><div>");
+  input("Until (hour)", "nightEnd", String(nightEnd), "number",
+        "min=\"0\" max=\"23\" inputmode=\"numeric\"");
+  page.add("</div></div>");
+  slider("Day brightness", "dayBrightness", dayBrightness);
+  slider("Night brightness", "nightBrightness", nightBrightness);
+  page.add("</section>");
+
+  section("API keys");
+  input("TMB App ID", "appId", appId, "text", "");
+  input("TMB App Key", "appKey", appKey, "password", "");
+  hint("Free at developer.tmb.cat. Needed for bus times.");
+  input("OpenWeatherMap key", "owmApiKey", owmApiKey, "password", "");
+  hint("Optional. Adds air quality and OWM forecasts; without it weather "
+       "comes from Open-Meteo.");
+  page.add("</section>");
+
+  section("Security");
+  input("Password", "webPassword", "", "password",
+        "placeholder=\"Leave blank to keep\"");
+  hint(webPassword.length() > 0
+           ? "Set. Protects this page (user admin) and OTA updates."
+           : "Not set: anyone on your network can change settings or "
+             "update the firmware.");
+  if (webPassword.length() > 0)
+    page.add("<label class=\"check\"><input type=\"checkbox\" "
+             "name=\"clearWebPassword\">Remove password</label>");
+  page.add("</section></form>");
 
   // Device health (same figures as the "MON:" serial log lines)
   SystemMonitor::Stats st = SystemMonitor::read();
-  char status[320];
+  char status[420];
   snprintf(status, sizeof(status),
-           "<h3>Status</h3><p style='font-family:monospace;color:#aaa'>"
-           "Firmware: %s %s<br>Uptime: %s<br>WiFi: %d dBm<br>"
-           "Heap: %u free, %u min, %u largest block<br>"
-           "Stack free: loop %d, net %d bytes</p>",
+           "<section><h2>Status</h2><dl>"
+           "<dt>Firmware</dt><dd>%s %s</dd>"
+           "<dt>Uptime</dt><dd>%s</dd>"
+           "<dt>WiFi</dt><dd>%d dBm</dd>"
+           "<dt>Heap</dt><dd>%u KB free, %u KB min, %u KB largest</dd>"
+           "<dt>Stack free</dt><dd>loop %d, net %d bytes</dd>"
+           "</dl></section>",
            __DATE__, __TIME__, SystemMonitor::formatUptime(st.uptimeS).c_str(),
-           st.rssi, st.heapFree, st.heapMinFree, st.heapLargest,
-           st.loopStackFree, st.netStackFree);
-  html += status;
-  html += "</body></html>";
-  server.send(200, "text/html", html);
+           st.rssi, st.heapFree / 1024, st.heapMinFree / 1024,
+           st.heapLargest / 1024, st.loopStackFree, st.netStackFree);
+  page.add(status);
+
+  page.add(PAGE_TAIL);
+  page.end();
 }
 
 void NetworkManager::handleSave() {
@@ -357,10 +470,13 @@ void NetworkManager::handleSave() {
 
     prefs.end();
 
-    String html = "<html><head><meta http-equiv='refresh' "
-                  "content='3;url=/'></head><body>";
-    html += "<h2>Saved!</h2><p>Restarting...</p></body></html>";
-    server.send(200, "text/html", html);
+    // Same style as the settings page; reloads it once the device is back
+    String html = PAGE_HEAD;
+    html.replace("<title>", "<meta http-equiv=\"refresh\" content=\"10;url=/\">"
+                            "<title>");
+    html += "<div class=\"msg\"><h1>Saved</h1><p class=\"sub\">Restarting. "
+            "This page reloads in a few seconds.</p></div></main></body></html>";
+    server.send(200, "text/html; charset=utf-8", html);
     delay(1000);
     ESP.restart();
   } else {
