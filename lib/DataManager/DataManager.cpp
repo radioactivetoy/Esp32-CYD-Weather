@@ -16,6 +16,8 @@ static const uint32_t BUS_REFRESH_MS = 60000UL; // Stop shown on screen
 // Stops not on screen: entering the Bus app / switching stop fetches fresh
 // data anyway, so polling them every minute only costs TLS handshakes.
 static const uint32_t BUS_BACKGROUND_REFRESH_MS = 5UL * 60000UL;
+// A forced refresh is skipped for data younger than this
+static const uint32_t BUS_JUST_REFRESHED_MS = 15000UL;
 static const uint32_t STOCK_REFRESH_MS = 5UL * 60000UL;
 
 // Wrap-safe "now has reached deadline"
@@ -379,8 +381,13 @@ void DataManager::networkTask(void *parameter) {
       if (!b.hasData || now - b.lastUpdate > BUS_REFRESH_MS)
         priorityBus = targetBus;
     }
-    if (manualBusTrigger.exchange(false) && busValid)
-      priorityBus = targetBus;
+    // Entering the Bus app forces a refresh, unless the stop was just
+    // refreshed (e.g. by the visible-stop poll that also starts on entry)
+    if (manualBusTrigger.exchange(false) && busValid) {
+      const BusStopCache &b = busCaches[targetBus];
+      if (!b.hasData || now - b.lastUpdate > BUS_JUST_REFRESHED_MS)
+        priorityBus = targetBus;
+    }
 
     // 2. At most one network request per MIN_REQUEST_GAP_MS.
     if (!requestedOnce || now - lastRequestMs >= MIN_REQUEST_GAP_MS) {

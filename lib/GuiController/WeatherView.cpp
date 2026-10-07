@@ -532,10 +532,17 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
     initListStyles();
 
-    int count = isHourly ? 24 : 7;
+    // Hourly shows 12 rows (each row costs ~1.3KB of heap): OWM's 3-hour
+    // slots cover 36h; Open-Meteo's 1-hour slots are shown every 2nd hour
+    // to still cover 24h.
+    const int hourStride = (data.hourlyStepHours == 1) ? 2 : 1;
+    int count = isHourly ? 12 : 7;
     for (int i = 0; i < count; i++) {
+      int h = isHourly ? i * hourStride : 0; // Index into data.hourly
+      if (h >= 24)
+        break;
       // Providers fill fewer slots than we have room for (OWM: ~6 days)
-      if (isHourly ? data.hourly[i].time.isEmpty()
+      if (isHourly ? data.hourly[h].time.isEmpty()
                    : data.daily[i].date.isEmpty())
         break;
 
@@ -553,9 +560,9 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *time_lbl = lv_label_create(row);
       lv_obj_add_style(time_lbl, &styleTimeCol, 0);
       if (isHourly) {
-        if (data.hourly[i].time.length() > 10)
+        if (data.hourly[h].time.length() > 10)
           lv_label_set_text(time_lbl,
-                            data.hourly[i].time.substring(11, 16).c_str());
+                            data.hourly[h].time.substring(11, 16).c_str());
         else
           lv_label_set_text(time_lbl, "--:--");
       } else {
@@ -576,12 +583,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                         LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
       lv_obj_t *icon = createWeatherIcon(
           icon_box,
-          isHourly ? data.hourly[i].weatherCode : data.daily[i].weatherCode,
-          isHourly && data.hourly[i].isNight); // Daily: day icon
+          isHourly ? data.hourly[h].weatherCode : data.daily[i].weatherCode,
+          isHourly && data.hourly[h].isNight); // Daily: day icon
       lv_img_set_zoom(icon, 160);
 
       // Rain Prob (List)
-      float pop = isHourly ? data.hourly[i].pop : data.daily[i].pop;
+      float pop = isHourly ? data.hourly[h].pop : data.daily[i].pop;
       lv_obj_t *rain_lbl = lv_label_create(row);
       lv_obj_add_style(rain_lbl, &styleRainCol, 0);
       if (pop >= 0.1) { // Show if > 10%
@@ -615,7 +622,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       // Temp
       lv_obj_t *temp_lbl = lv_label_create(row);
       if (isHourly)
-        snprintf(buf, sizeof(buf), "%.1f°", data.hourly[i].temp);
+        snprintf(buf, sizeof(buf), "%.1f°", data.hourly[h].temp);
       else
         snprintf(buf, sizeof(buf), "%.0f°/%.0f°", data.daily[i].minTemp,
                  data.daily[i].maxTemp);

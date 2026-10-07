@@ -20,7 +20,7 @@ The interface relies on intuitive **Touch Gestures**:
     *   **Source**: OpenWeatherMap (5-Day / 3-Hour Forecast API) when an OWM key is set; otherwise Open-Meteo (no key needed, hourly data). Failed fetches back off (30s up to 15 min) instead of retrying every second.
     *   **Current**: Design-foward "Glassmorphism" card with Pills (Humidity, Wind, Pressure, AQI).
     *   **Rain Probability**: Shown in blue appended to description (e.g., "Overcast 30%") and in forecast lists.
-    *   **Hourly**: Scrollable list of 24h forecast.
+    *   **Hourly**: Scrollable 12-row forecast: every 3 hours over the next 36h (OWM) or every 2 hours over 24h (Open-Meteo).
     *   **Daily**: Daily forecast with high/low temps and mid-day icons (~6 days with OWM, 7 with Open-Meteo).
 2.  **TMB Bus Tracker**:
     *   **Real-time Arrivals**: Shows minutes/seconds remaining.
