@@ -12,16 +12,18 @@ The interface relies on intuitive **Touch Gestures**:
 | **Switch Page** | **Swipe LEFT / RIGHT** | **Weather**: Next/Prev City |
 | **Switch Station**| **Tap Screen (Bus)** | **Bus**: Next Bus Stop |
 | **Toggle View** | **Tap Screen (Weather)** | **Weather**: Cycle Views (Current → Hourly → Daily) |
+| **Refresh Now** | **Long-press screen** | Refreshes the current app immediately |
+| **Device Info** | **Long-press header** | WiFi, IP, uptime, memory; tap to close |
 | **Refresh Data** | **Auto / Swipe / Tap** | **Bus**: Auto-refreshes on entry, on tap, & every 60s <br> **Stock**: 5 min <br> **Weather**: 15 min (10 min when switching city) |
 
 ## ✨ Features (Polished)
 
 1.  **Multi-City Weather**:
     *   **Source**: OpenWeatherMap (5-Day / 3-Hour Forecast API) when an OWM key is set; otherwise Open-Meteo (no key needed, hourly data). Failed fetches back off (30s up to 15 min) instead of retrying every second.
-    *   **Current**: Design-foward "Glassmorphism" card with Pills (Humidity, Wind, Pressure, AQI).
+    *   **Current**: "Glassmorphism" card (temperature colour-coded, feels like, high/low, sunrise/sunset) with pills for Humidity, Wind (colour by strength), UV Index and Air Quality.
     *   **Rain Probability**: Shown in blue appended to description (e.g., "Overcast 30%") and in forecast lists.
     *   **Hourly**: Scrollable 12-row forecast: every 3 hours over the next 36h (OWM) or every 2 hours over 24h (Open-Meteo).
-    *   **Daily**: Daily forecast with high/low temps and mid-day icons (~6 days with OWM, 7 with Open-Meteo).
+    *   **Daily**: 7-day forecast with high/low temps and mid-day icons. With OWM, today's full-day high/low, UV and the days beyond OWM's range come from one extra Open-Meteo request.
 2.  **TMB Bus Tracker**:
     *   **Real-time Arrivals**: Shows minutes/seconds remaining.
     *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen or tapping to switch stations.
@@ -35,6 +37,10 @@ The interface relies on intuitive **Touch Gestures**:
     *   **Display**: CYD (Cheap Yellow Display) - ESP32-2432S024C.
     *   **Touch**: CST816S Capacitive Touch (Gestures + Taps).
     *   **Sensor**: LDR (Light Dependent Resistor) for Auto-Brightness.
+
+## Credits
+
+-   Weather icons: [Meteocons](https://github.com/basmilius/weather-icons) by Bas Milius (MIT License), converted with `tools/convert_meteocons.py`.
 
 ## Hardware
 

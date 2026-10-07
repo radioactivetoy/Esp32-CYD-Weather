@@ -130,13 +130,13 @@ static void initListStyles() {
   lv_style_init(&styleRow);
   lv_style_set_bg_opa(&styleRow, LV_OPA_80);
   lv_style_set_border_width(&styleRow, 2);
-  lv_style_set_border_color(&styleRow, lv_color_hex(0x777777));
+  lv_style_set_border_color(&styleRow, lv_color_hex(0xAAAAAA));
   lv_style_set_border_opa(&styleRow, LV_OPA_70);
 
   lv_style_init(&styleRowEven);
-  lv_style_set_bg_color(&styleRowEven, lv_color_hex(0x101010));
+  lv_style_set_bg_color(&styleRowEven, lv_color_hex(0x181818));
   lv_style_init(&styleRowOdd);
-  lv_style_set_bg_color(&styleRowOdd, lv_color_hex(0x202020));
+  lv_style_set_bg_color(&styleRowOdd, lv_color_hex(0x2A2A2A));
 
   lv_style_init(&styleIconBox);
   lv_style_set_width(&styleIconBox, 40);
@@ -236,7 +236,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_t *city_lbl = lv_label_create(header_row);
   lv_obj_set_width(city_lbl, 160); // Reduced to 160 as per user request
   lv_label_set_long_mode(city_lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
-  lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
+  lv_obj_set_style_text_color(city_lbl, lv_color_hex(0xFFFFFF), 0);
   lv_obj_set_style_text_font(city_lbl, &Fonts::text20, 0); // Accents: "Vallès"
   lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
@@ -262,7 +262,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else {
     lv_label_set_text(time_lbl, "--:--");
   }
-  lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xDDDDDD), 0);
   lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20, 0);
   lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
   GuiController::setActiveTimeLabel(time_lbl);
@@ -300,11 +300,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
                  38); // Align below header (moved up 45->38)
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(glass_card, LV_OPA_70, 0);
+    lv_obj_set_style_bg_opa(glass_card, LV_OPA_60, 0);
     lv_obj_set_style_radius(glass_card, 15, 0);
     lv_obj_set_style_border_width(glass_card, 2, 0); // Increased 1->2
     lv_obj_set_style_border_color(glass_card, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_opa(glass_card, LV_OPA_50, 0);
+    lv_obj_set_style_border_opa(glass_card, LV_OPA_70, 0);
     lv_obj_set_flex_flow(glass_card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(glass_card, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -345,7 +345,17 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_label_set_text(temp_lbl, buf);
     lv_obj_set_style_text_font(temp_lbl, &lv_font_montserrat_32,
                                0); // Upgrade 24->32
-    lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
+    // Colour by temperature: icy blue .. white .. warm amber .. hot red
+    uint32_t tempColor = 0xFFFFFF;
+    if (data.currentTemp < 0)
+      tempColor = 0x88AAFF;
+    else if (data.currentTemp < 10)
+      tempColor = 0xAADDFF;
+    else if (data.currentTemp >= 28)
+      tempColor = 0xFF5533;
+    else if (data.currentTemp >= 20)
+      tempColor = 0xFFCC44;
+    lv_obj_set_style_text_color(temp_lbl, lv_color_hex(tempColor), 0);
 
     // Right Arrow - Floating to keep Temp centered
     lv_obj_t *arrow_r = lv_label_create(temp_row);
@@ -443,11 +453,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     auto add_pill = [&](const char *label, const char *value, uint32_t color) {
       lv_obj_t *pill = lv_obj_create(details_cont);
       lv_obj_set_size(pill, 105, 40);
-      lv_obj_set_style_bg_color(pill, lv_color_hex(0x202020), 0);
+      lv_obj_set_style_bg_color(pill, lv_color_hex(0x2A2A2A), 0);
       lv_obj_set_style_bg_opa(pill, LV_OPA_80, 0);
       lv_obj_set_style_radius(pill, 10, 0);
       lv_obj_set_style_border_width(pill, 2, 0); // Increased 1->2
-      lv_obj_set_style_border_color(pill, lv_color_hex(0x777777),
+      lv_obj_set_style_border_color(pill, lv_color_hex(0xAAAAAA),
                                     0); // Lighter 55->77
       lv_obj_set_style_border_opa(pill, LV_OPA_70, 0);
       lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_COLUMN);
@@ -465,7 +475,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
       lv_obj_t *l = lv_label_create(pill);
       lv_label_set_text(l, label);
-      lv_obj_set_style_text_color(l, lv_color_hex(0xDDDDDD),
+      lv_obj_set_style_text_color(l, lv_color_hex(0xFFFFFF),
                                   0); // Brighter Grey
       lv_obj_set_style_text_font(l, &lv_font_montserrat_16,
                                  0); // Upgrade 14->16
@@ -478,10 +488,32 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     char windLabel[16];
     snprintf(windLabel, sizeof(windLabel), "Wind %s",
              getWindDir(data.windDirection));
-    add_pill(windLabel, buf, 0x90EE90);
+    uint32_t windColor = 0x90EE90; // Calm
+    if (data.windSpeed >= 20)
+      windColor = 0xFFFF00; // Breezy
+    if (data.windSpeed >= 40)
+      windColor = 0xFF9900; // Strong
+    if (data.windSpeed >= 60)
+      windColor = 0xFF4444; // Gale
+    add_pill(windLabel, buf, windColor);
 
-    snprintf(buf, sizeof(buf), "%.0f hPa", data.currentPressure);
-    add_pill("Pressure", buf, 0xFFFFFF);
+    // UV index (WHO scale colours); "--" when unknown
+    uint32_t uvColor = 0x888888;
+    if (data.uvIndex >= 0) {
+      snprintf(buf, sizeof(buf), "%.0f", data.uvIndex);
+      uvColor = 0x00FF00; // Low (0-2)
+      if (data.uvIndex >= 3)
+        uvColor = 0xFFFF00; // Moderate
+      if (data.uvIndex >= 6)
+        uvColor = 0xFF8800; // High
+      if (data.uvIndex >= 8)
+        uvColor = 0xFF4444; // Very high
+      if (data.uvIndex >= 11)
+        uvColor = 0xFF00FF; // Extreme
+    } else {
+      snprintf(buf, sizeof(buf), "--");
+    }
+    add_pill("UV Index", buf, uvColor);
 
     // OWM scale 1..5 shown as words ("Good", "Fair", ...); "--" if unknown
     const char *aqiText = "--"; // No OWM key or fetch failed

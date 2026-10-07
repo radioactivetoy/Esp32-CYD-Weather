@@ -75,6 +75,11 @@ bool WeatherService::updateWeather(WeatherData &data, float lat, float lon,
   if (!forecastOk)
     return false;
 
+  // OWM's free forecast lacks UV, gives "today" high/low only for the hours
+  // left, and covers ~6 days. One small Open-Meteo request fills that in.
+  if (data.hourlyStepHours == 3) // OWM forecast was used
+    supplementOpenMeteoDaily(data, lat, lon);
+
   if (hasKey) {
     // 2. Air quality (OWM only)
     updateAirQualityOWM(data, lat, lon, owmApiKey);
@@ -215,7 +220,7 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
       "&current=temperature_2m,relative_humidity_2m,apparent_temperature,"
       "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day"
       "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-      "precipitation_probability_max,sunrise,sunset"
+      "precipitation_probability_max,sunrise,sunset,uv_index_max"
       "&hourly=temperature_2m,weather_code,precipitation_probability,is_day"
       "&timezone=auto&past_days=1";
 
@@ -256,6 +261,8 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
             (doc["daily"]["precipitation_probability_max"][jsonIdx] | 0) /
             100.0f;
       }
+
+      data.uvIndex = doc["daily"]["uv_index_max"][1] | -1.0f; // Today
 
       // Today's sun times ("YYYY-MM-DDTHH:MM", already city-local); index 1
       // is today because of past_days=1
@@ -474,6 +481,68 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
   http.end();
   client.stop();
   return ok;
+}
+
+void WeatherService::supplementOpenMeteoDaily(WeatherData &data, float lat,
+                                              float lon) {
+  WiFiClientSecure client;
+  HTTPClient http;
+  String url =
+      "https://api.open-meteo.com/v1/forecast?latitude=" + String(lat, 4) +
+      "&longitude=" + String(lon, 4) +
+      "&daily=uv_index_max,temperature_2m_max,temperature_2m_min,"
+      "weather_code,precipitation_probability_max"
+      "&timezone=auto&forecast_days=7";
+
+  Serial.printf("Fetching Open-Meteo daily supplement: %.4f, %.4f\n", lat,
+                lon);
+  if (httpsGet(http, client, url, 5000)) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, http.getStream());
+    JsonObject daily = doc["daily"];
+    JsonArray days = daily["time"];
+    if (error || days.size() == 0) {
+      Serial.println("Supplement: no usable data");
+    } else {
+      // Days are matched by date (both city-local), not by position: near
+      // midnight the two providers can disagree on which day is "today".
+      int filled = 0; // OWM fills daily[] from index 0 without gaps
+      while (filled < 7 && data.daily[filled].date.length() > 0)
+        filled++;
+      String lastDate = filled > 0 ? data.daily[filled - 1].date : String("");
+
+      for (size_t j = 0; j < days.size(); j++) {
+        String date = days[j].as<String>();
+        float maxT = daily["temperature_2m_max"][j] | NAN;
+        float minT = daily["temperature_2m_min"][j] | NAN;
+
+        if (date == data.daily[0].date) {
+          // Today: full-day high/low instead of only the hours left
+          if (!isnan(maxT) && !isnan(minT)) {
+            data.daily[0].maxTemp = maxT;
+            data.daily[0].minTemp = minT;
+          }
+          data.uvIndex = daily["uv_index_max"][j] | -1.0f;
+        } else if (filled < 7 && date > lastDate && !isnan(maxT) &&
+                   !isnan(minT)) {
+          // A day beyond OWM's range: append it
+          DailyForecast &d = data.daily[filled++];
+          d.date = date;
+          d.maxTemp = maxT;
+          d.minTemp = minT;
+          d.weatherCode = daily["weather_code"][j] | -1;
+          d.pop = (daily["precipitation_probability_max"][j] | 0) / 100.0f;
+          lastDate = date;
+        }
+      }
+      Serial.printf("Supplement: UV=%.1f today H=%.1f L=%.1f, %d days\n",
+                    data.uvIndex, data.daily[0].maxTemp, data.daily[0].minTemp,
+                    filled);
+    }
+  }
+  // Failure is fine: the OWM data stands on its own
+  http.end();
+  client.stop();
 }
 
 void WeatherService::updateAirQualityOWM(WeatherData &data, float lat,

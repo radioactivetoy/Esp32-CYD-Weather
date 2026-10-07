@@ -36,14 +36,16 @@ static int remainingSeconds(int secondsAtFetch) {
 static void setEtaLabel(lv_obj_t *label, int seconds) {
   char buf[16];
   if (seconds < 60)
-    snprintf(buf, sizeof(buf), "Prop");
+    snprintf(buf, sizeof(buf), "Due");
   else
     snprintf(buf, sizeof(buf), "%d min", seconds / 60);
   lv_label_set_text(label, buf);
 
   int mins = seconds / 60;
   uint32_t col = 0x00FF00;
-  if (mins <= 2)
+  if (seconds < 60)
+    col = 0xFF2222; // Due now
+  else if (mins <= 2)
     col = 0xFF4500;
   else if (mins <= 5)
     col = 0xFFFF00;
@@ -138,7 +140,7 @@ void BusView::show(const BusData &data, int anim) {
 
   lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
   lv_obj_set_width(title, 160);
-  lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0); // Cyan
+  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
   lv_obj_set_style_text_font(title, &Fonts::text20, 0); // Accents: "Plaça"
   Serial.println("BusView: Title Set");
   lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0); // Left Aligned (No Icon)
@@ -157,7 +159,7 @@ void BusView::show(const BusData &data, int anim) {
   } else {
     lv_label_set_text(time_lb, "--:--");
   }
-  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0); // Grey
+  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xDDDDDD), 0);
   lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20, 0);
   lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0); // Top aligned
   GuiController::setActiveTimeLabel(time_lb);
@@ -227,10 +229,10 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks from row
 
       uint32_t bg_col =
-          (idx % 2 == 0) ? 0x101010 : 0x202020; // 333333 -> 202020
+          (idx % 2 == 0) ? 0x181818 : 0x2A2A2A;
       lv_obj_set_style_bg_color(row, lv_color_hex(bg_col), 0);
       lv_obj_set_style_border_width(row, 2, 0); // Increased 1->2
-      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(0xAAAAAA), 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_set_style_pad_all(row, 5, 0);
@@ -257,7 +259,7 @@ void BusView::show(const BusData &data, int anim) {
       lv_label_set_text(dest, GuiController::sanitize(arr.destination).c_str());
       lv_obj_set_flex_grow(dest, 1);
       lv_label_set_long_mode(dest, LV_LABEL_LONG_SCROLL_CIRCULAR);
-      lv_obj_set_style_text_color(dest, lv_color_hex(0xDDDDDD), 0);
+      lv_obj_set_style_text_color(dest, lv_color_hex(0xFFFFFF), 0);
       lv_obj_set_style_text_font(dest, &Fonts::text14, 0); // Accents
 
       lv_obj_t *timeLbl = lv_label_create(row);

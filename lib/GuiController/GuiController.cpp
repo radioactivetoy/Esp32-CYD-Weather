@@ -128,7 +128,8 @@ static bool sameWeatherDisplay(const WeatherData &a, const WeatherData &b) {
       a.currentAQI != b.currentAQI || a.windSpeed != b.windSpeed ||
       a.windDirection != b.windDirection ||
       a.currentRainProb != b.currentRainProb || a.isNight != b.isNight ||
-      a.sunrise != b.sunrise || a.sunset != b.sunset)
+      a.sunrise != b.sunrise || a.sunset != b.sunset ||
+      a.uvIndex != b.uvIndex)
     return false;
   for (int i = 0; i < 7; i++)
     if (!sameDaily(a.daily[i], b.daily[i]))
@@ -520,7 +521,7 @@ void GuiController::createPageDots(lv_obj_t *parent, int count, int active) {
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(
-        dot, lv_color_hex(isActive ? 0x00FFFF : 0x555555), 0);
+        dot, lv_color_hex(isActive ? 0xFFFFFF : 0x666666), 0);
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
   }
 }

@@ -36,6 +36,7 @@ struct WeatherData {
   bool isNight = false;
   String sunrise; // "HH:MM" city-local, empty = unknown
   String sunset;
+  float uvIndex = -1; // Today's max UV index, -1 = unknown
   int hourlyStepHours = 1; // 1 = Open-Meteo hourly, 3 = OWM 3-hour slots
   uint32_t lastUpdate = 0; // millis() of last successful update, 0 = no data
   DailyForecast daily[7];
@@ -64,6 +65,9 @@ private:
                                      const String &apiKey);
   static bool updateCurrentWeatherOWM(WeatherData &data, float lat, float lon,
                                       const String &apiKey);
+  // OWM only: UV, full-day "today" high/low and the days OWM lacks
+  static void supplementOpenMeteoDaily(WeatherData &data, float lat,
+                                       float lon);
   static void updateAirQualityOWM(WeatherData &data, float lat, float lon,
                                   const String &apiKey);
 };

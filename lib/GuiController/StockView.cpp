@@ -77,7 +77,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   } else {
     lv_label_set_text(time_lb, "--:--");
   }
-  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xDDDDDD), 0);
   lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20,
                              0); // Upgrade 14->20
   lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
@@ -128,9 +128,9 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       // 44px, enough for the price (25px) + change (16px) stack.
       lv_obj_set_size(row, LV_PCT(100), 54);
       lv_obj_set_style_pad_ver(row, 3, 0);
-      lv_obj_set_style_bg_color(row, lv_color_hex(0x202020), 0);
+      lv_obj_set_style_bg_color(row, lv_color_hex(0x2A2A2A), 0);
       lv_obj_set_style_bg_opa(row, LV_OPA_80, 0);
-      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(0xAAAAAA), 0);
       lv_obj_set_style_border_width(row, 2, 0);
       lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
