@@ -116,7 +116,7 @@ static lv_style_t styleTimeCol;  // Hourly: time, white like the daily day names
 static lv_style_t styleRainCol;  // Hourly: rain %, blue, right-aligned
 static lv_style_t styleTempCol;  // Hourly: temperature, fills the rest, right
 static lv_style_t styleDayCol;   // Daily: day + rain stacked
-static lv_style_t styleLowCol;   // Daily: low, dim, right-aligned
+static lv_style_t styleLowCol;   // Daily: low, right-aligned
 static lv_style_t styleHighCol;  // Daily: high, right-aligned
 static lv_style_t styleTrack;    // Daily: low..high bar track
 static lv_style_t styleFill;     // Daily: bar fill (colour set per row)
@@ -159,7 +159,7 @@ static void initListStyles() {
   lv_style_set_width(&styleLowCol, 30);
   lv_style_set_text_align(&styleLowCol, LV_TEXT_ALIGN_RIGHT);
   lv_style_set_text_font(&styleLowCol, &Theme::body);
-  lv_style_set_text_color(&styleLowCol, lv_color_hex(Theme::TEXT_DIM));
+  lv_style_set_text_color(&styleLowCol, lv_color_hex(Theme::TEXT));
 
   lv_style_init(&styleHighCol);
   lv_style_set_width(&styleHighCol, 32);
@@ -297,7 +297,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
     snprintf(buf, sizeof(buf), "H %.0f\xC2\xB0  \xC2\xB7  L %.0f\xC2\xB0",
              data.daily[0].maxTemp, data.daily[0].minTemp);
-    Theme::label(col, buf, &Fonts::text14, Theme::TEXT_DIM);
+    Theme::label(col, buf, &Fonts::text14, Theme::TEXT);
 
     Theme::divider(bg_grad, 10, 148, 220);
 
