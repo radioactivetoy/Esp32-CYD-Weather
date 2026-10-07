@@ -68,8 +68,8 @@ const char *WeatherView::getWeatherDesc(int code) {
   }
 }
 
-void WeatherView::createWeatherIcon(lv_obj_t *parent, int code, bool isNight) {
-  lv_obj_clean(parent);
+lv_obj_t *WeatherView::createWeatherIcon(lv_obj_t *parent, int code,
+                                         bool isNight) {
   const void *src = &weather_icon_cloud;
   lv_color_t color = lv_color_hex(0xFFFFFF);
 
@@ -120,6 +120,60 @@ void WeatherView::createWeatherIcon(lv_obj_t *parent, int code, bool isNight) {
   lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
   lv_obj_set_style_img_recolor_opa(img, LV_OPA_COVER, 0);
   lv_obj_set_style_img_recolor(img, color, 0);
+  return img;
+}
+
+// --- Shared styles for the hourly / daily list rows ---
+// The hourly list has 24 rows of 5-6 objects. Setting each property on each
+// object allocates a private style per object (about 1.5KB per row in
+// practice); these styles are created once and only referenced by the rows.
+static lv_style_t styleRow;      // Border + background opacity
+static lv_style_t styleRowEven;  // Background colour, alternating
+static lv_style_t styleRowOdd;
+static lv_style_t styleTimeCol;  // White, fixed width
+static lv_style_t styleRainCol;  // Blue, small, centred, fixed width
+static lv_style_t styleTrendCol; // Centred, fixed width
+static lv_style_t styleTrendUp;
+static lv_style_t styleTrendDown;
+static lv_style_t styleTempCol; // White
+
+static void initListStyles() {
+  static bool done = false;
+  if (done)
+    return;
+  done = true;
+
+  lv_style_init(&styleRow);
+  lv_style_set_bg_opa(&styleRow, LV_OPA_80);
+  lv_style_set_border_width(&styleRow, 2);
+  lv_style_set_border_color(&styleRow, lv_color_hex(0x777777));
+  lv_style_set_border_opa(&styleRow, LV_OPA_70);
+
+  lv_style_init(&styleRowEven);
+  lv_style_set_bg_color(&styleRowEven, lv_color_hex(0x101010));
+  lv_style_init(&styleRowOdd);
+  lv_style_set_bg_color(&styleRowOdd, lv_color_hex(0x202020));
+
+  lv_style_init(&styleTimeCol);
+  lv_style_set_width(&styleTimeCol, 60);
+  lv_style_set_text_color(&styleTimeCol, lv_color_hex(0xFFFFFF));
+
+  lv_style_init(&styleRainCol);
+  lv_style_set_width(&styleRainCol, 40);
+  lv_style_set_text_align(&styleRainCol, LV_TEXT_ALIGN_CENTER);
+  lv_style_set_text_color(&styleRainCol, lv_color_hex(0x00BFFF));
+  lv_style_set_text_font(&styleRainCol, &lv_font_montserrat_14);
+
+  lv_style_init(&styleTrendCol);
+  lv_style_set_width(&styleTrendCol, 20);
+  lv_style_set_text_align(&styleTrendCol, LV_TEXT_ALIGN_CENTER);
+  lv_style_init(&styleTrendUp);
+  lv_style_set_text_color(&styleTrendUp, lv_color_hex(0xFF5555));
+  lv_style_init(&styleTrendDown);
+  lv_style_set_text_color(&styleTrendDown, lv_color_hex(0x5555FF));
+
+  lv_style_init(&styleTempCol);
+  lv_style_set_text_color(&styleTempCol, lv_color_hex(0xFFFFFF));
 }
 
 void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
@@ -471,6 +525,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_style_pad_all(list, 0, 0);
     lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE);
 
+    initListStyles();
+
     int count = isHourly ? 24 : 7;
     for (int i = 0; i < count; i++) {
       // Providers fill fewer slots than we have room for (OWM: ~6 days)
@@ -483,19 +539,14 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
       lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
                             LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-      lv_obj_set_style_bg_color(row,
-                                lv_color_hex((i % 2) ? 0x202020 : 0x101010),
-                                0);               // Darker alternating
-      lv_obj_set_style_bg_opa(row, LV_OPA_80, 0); // High Opacity
-      lv_obj_set_style_border_width(row, 2, 0);   // 1->2
-      lv_obj_set_style_border_color(row, lv_color_hex(0x777777), 0);
-      lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
+      lv_obj_add_style(row, &styleRow, 0);
+      lv_obj_add_style(row, (i % 2) ? &styleRowOdd : &styleRowEven, 0);
       lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE);
 
       // Time/Day
       lv_obj_t *time_lbl = lv_label_create(row);
-      lv_obj_set_width(time_lbl, 60);
+      lv_obj_add_style(time_lbl, &styleTimeCol, 0);
       if (isHourly) {
         if (data.hourly[i].time.length() > 10)
           lv_label_set_text(time_lbl,
@@ -510,36 +561,24 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
           formatDate(data.daily[i].date.c_str(), dateBuf); // "Wed 8"
         lv_label_set_text(time_lbl, dateBuf);
       }
-      lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xFFFFFF), 0);
 
-      // Icon
-      lv_obj_t *icon_box = lv_obj_create(row);
-      lv_obj_set_size(icon_box, 40, 40);
-      lv_obj_set_style_bg_opa(icon_box, LV_OPA_TRANSP, 0);
-      lv_obj_set_style_border_width(icon_box, 0, 0);
-      lv_obj_set_style_pad_all(icon_box, 0, 0);
-      lv_obj_clear_flag(icon_box,
-                        LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-      createWeatherIcon(icon_box,
-                        isHourly ? data.hourly[i].weatherCode
-                                 : data.daily[i].weatherCode,
-                        isHourly && data.hourly[i].isNight); // Daily: day icon
-      if (lv_obj_get_child(icon_box, 0))
-        lv_img_set_zoom(lv_obj_get_child(icon_box, 0), 160);
+      // Icon: 64px image zoomed to 40px. SIZE_MODE_REAL makes the object
+      // itself 40x40, so no wrapper box is needed for the flex layout.
+      lv_obj_t *icon = createWeatherIcon(
+          row,
+          isHourly ? data.hourly[i].weatherCode : data.daily[i].weatherCode,
+          isHourly && data.hourly[i].isNight); // Daily: day icon
+      lv_img_set_size_mode(icon, LV_IMG_SIZE_MODE_REAL);
+      lv_img_set_zoom(icon, 160);
 
       // Rain Prob (List)
       float pop = isHourly ? data.hourly[i].pop : data.daily[i].pop;
       lv_obj_t *rain_lbl = lv_label_create(row);
-      lv_obj_set_width(rain_lbl, 40);
-      lv_obj_set_style_text_align(rain_lbl, LV_TEXT_ALIGN_CENTER, 0);
-
+      lv_obj_add_style(rain_lbl, &styleRainCol, 0);
       if (pop >= 0.1) { // Show if > 10%
         char rainBuf[16];
         snprintf(rainBuf, sizeof(rainBuf), "%.0f%%", pop * 100.0);
         lv_label_set_text(rain_lbl, rainBuf);
-        lv_obj_set_style_text_color(rain_lbl, lv_color_hex(0x00BFFF), 0);
-        lv_obj_set_style_text_font(rain_lbl, &lv_font_montserrat_14,
-                                   0); // Small font
       } else {
         lv_label_set_text(rain_lbl, "");
       }
@@ -547,16 +586,15 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       // Trend
       if (!isHourly) {
         lv_obj_t *trend_lbl = lv_label_create(row);
-        lv_obj_set_width(trend_lbl, 20);
-        lv_obj_set_style_text_align(trend_lbl, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_add_style(trend_lbl, &styleTrendCol, 0);
         if (i > 0) {
           float diff = data.daily[i].maxTemp - data.daily[i - 1].maxTemp;
           if (diff >= 1.0) {
             lv_label_set_text(trend_lbl, LV_SYMBOL_UP);
-            lv_obj_set_style_text_color(trend_lbl, lv_color_hex(0xFF5555), 0);
+            lv_obj_add_style(trend_lbl, &styleTrendUp, 0);
           } else if (diff <= -1.0) {
             lv_label_set_text(trend_lbl, LV_SYMBOL_DOWN);
-            lv_obj_set_style_text_color(trend_lbl, lv_color_hex(0x5555FF), 0);
+            lv_obj_add_style(trend_lbl, &styleTrendDown, 0);
           } else {
             lv_label_set_text(trend_lbl, "");
           }
@@ -573,7 +611,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
         snprintf(buf, sizeof(buf), "%.0f°/%.0f°", data.daily[i].minTemp,
                  data.daily[i].maxTemp);
       lv_label_set_text(temp_lbl, buf);
-      lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
+      lv_obj_add_style(temp_lbl, &styleTempCol, 0);
     }
 
     // Keep the scroll position when this same list is rebuilt with new data

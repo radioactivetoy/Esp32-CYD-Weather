@@ -10,7 +10,7 @@ public:
   static void show(const WeatherData &data, int anim, int forecastMode);
 
 private:
-  static void createWeatherIcon(lv_obj_t *parent, int code, bool isNight);
+  static lv_obj_t *createWeatherIcon(lv_obj_t *parent, int code, bool isNight);
   static const char *getWeatherDesc(int code);
   static void formatDate(const char *input, char *output);
 };

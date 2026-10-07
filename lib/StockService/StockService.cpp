@@ -62,8 +62,9 @@ std::vector<StockItem> StockService::getQuotes(const String &symbols) {
                                   : 0.0f;
           item.isValid = true;
           items.push_back(item);
-          Serial.printf("STOCK: Parsed %s -> $%.2f (%.2f%%)\n", symbol.c_str(),
-                        price, item.changePercent);
+          Serial.printf("STOCK: Parsed %s -> %.2f %s (%.2f%%)\n",
+                        symbol.c_str(), price, item.currency.c_str(),
+                        item.changePercent);
         } else {
           Serial.printf("STOCK: Invalid data for %s (Zero Price)\n",
                         symbol.c_str());

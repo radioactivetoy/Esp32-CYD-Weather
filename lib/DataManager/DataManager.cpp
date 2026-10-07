@@ -12,7 +12,10 @@ static const uint32_t NET_WDT_TIMEOUT_S = 60;
 static const uint32_t MIN_REQUEST_GAP_MS = 1000;           // Global rate limit
 static const uint32_t WEATHER_REFRESH_MS = 15UL * 60000UL; // Background refresh
 static const uint32_t WEATHER_SWITCH_STALE_MS = 10UL * 60000UL; // Refetch on switch
-static const uint32_t BUS_REFRESH_MS = 60000UL;
+static const uint32_t BUS_REFRESH_MS = 60000UL; // Stop shown on screen
+// Stops not on screen: entering the Bus app / switching stop fetches fresh
+// data anyway, so polling them every minute only costs TLS handshakes.
+static const uint32_t BUS_BACKGROUND_REFRESH_MS = 5UL * 60000UL;
 static const uint32_t STOCK_REFRESH_MS = 5UL * 60000UL;
 
 // Wrap-safe "now has reached deadline"
@@ -323,9 +326,15 @@ void DataManager::networkTask(void *parameter) {
   };
 
   auto dueBus = [](uint32_t now) -> int {
+    // Only the stop on screen is kept minute-fresh
+    bool busVisible = GuiController::isBusScreenActive();
+    int visibleStop = GuiController::getBusIndex();
     for (size_t i = 0; i < busCaches.size(); i++) {
       const BusStopCache &b = busCaches[i];
-      bool stale = !b.hasData || now - b.lastUpdate > BUS_REFRESH_MS;
+      uint32_t interval = (busVisible && (int)i == visibleStop)
+                              ? BUS_REFRESH_MS
+                              : BUS_BACKGROUND_REFRESH_MS;
+      bool stale = !b.hasData || now - b.lastUpdate > interval;
       if (stale && (b.failCount == 0 || timeReached(now, b.nextAttempt)))
         return i;
     }

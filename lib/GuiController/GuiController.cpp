@@ -28,7 +28,8 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
 }
 
 // --- STATE VARIABLES ---
-GuiController::AppMode GuiController::currentApp = GuiController::APP_WEATHER;
+std::atomic<GuiController::AppMode> GuiController::currentApp{
+    GuiController::APP_WEATHER};
 
 // Bus State
 std::atomic<int> GuiController::currentBusIndex{0};
@@ -325,7 +326,7 @@ uint32_t GuiController::statusDotColor() {
   bool updating;
   uint32_t last;
   uint32_t staleMs;
-  switch (currentApp) {
+  switch (currentApp.load()) {
   case APP_WEATHER:
     updating = DataManager::isWeatherUpdating(getCityIndex());
     last = cachedWeather.lastUpdate;
@@ -384,7 +385,7 @@ void GuiController::requestRefresh() {
   // swipe animation with a background data refresh).
   if (pendingScreenChange != SCREEN_NONE)
     return;
-  switch (currentApp) {
+  switch (currentApp.load()) {
   case APP_WEATHER:
     pendingScreenChange = SCREEN_WEATHER;
     pendingScreenAnim = pendingCitySwipeAnim;
@@ -658,7 +659,7 @@ void GuiController::handleGesture(lv_event_t *e) {
     return;
   lv_dir_t dir = lv_indev_get_gesture_dir(indev);
 
-  Serial.printf("GESTURE: dir=%d, app=%d\n", dir, currentApp);
+  Serial.printf("GESTURE: dir=%d, app=%d\n", dir, (int)currentApp.load());
   lastGestureTime = millis();
 
   switch (dir) {

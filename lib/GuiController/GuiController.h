@@ -62,7 +62,8 @@ public:
   static void trackListScroll(lv_obj_t *list, int key);
 
   enum AppMode { APP_WEATHER, APP_STOCK, APP_BUS };
-  static AppMode currentApp;
+  // Written by the GUI loop, read by the network task (bus polling rate)
+  static std::atomic<AppMode> currentApp;
 
   // Multi-Bus Support
   static std::atomic<int> currentBusIndex;
