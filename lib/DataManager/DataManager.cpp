@@ -29,6 +29,12 @@ static uint32_t backoffMs(uint8_t failCount) {
   return ms > 900000UL ? 900000UL : ms;
 }
 
+// Large structs used only by the network task, kept OFF its stack: a
+// WeatherData is ~1KB, and the TLS handshake underneath each request needs
+// several KB of stack on its own (NetTask has 10KB in total).
+static WeatherData s_fetchWeather;
+static const WeatherData s_emptyWeather;
+
 // millis() timestamp that is never 0 (0 means "never updated" in the caches).
 static uint32_t stamp() {
   uint32_t m = millis();
@@ -169,7 +175,7 @@ void DataManager::networkTask(void *parameter) {
     if (c.hasData) {
       weatherData = c.data;
     } else {
-      weatherData = WeatherData();
+      weatherData = s_emptyWeather;
       weatherData.cityName =
           c.resolvedName.length() > 0 ? c.resolvedName : c.cityName;
     }
@@ -210,7 +216,8 @@ void DataManager::networkTask(void *parameter) {
       esp_task_wdt_reset();
     }
 
-    WeatherData temp;
+    WeatherData &temp = s_fetchWeather; // Static, see s_fetchWeather above
+    temp = s_emptyWeather;              // Fresh defaults for every fetch
     if (ok)
       ok = WeatherService::updateWeather(temp, c.lat, c.lon, owmKey);
     currentUpdatingCityIndex = -1;
