@@ -12,7 +12,7 @@ namespace Theme {
 constexpr uint32_t BG = 0x000000;        // Screen background
 constexpr uint32_t TEXT = 0xFFFFFF;      // Values, titles
 constexpr uint32_t TEXT_SOFT = 0xDDDDDD; // Header clock
-constexpr uint32_t TEXT_DIM = 0x8C8C8C;  // Labels, secondary info
+constexpr uint32_t TEXT_DIM = 0xA8A8A8;  // Labels, secondary info
 constexpr uint32_t DIVIDER = 0x333333;   // Hairlines, empty bar tracks
 constexpr uint32_t RAIN = 0x44BBFF;      // Precipitation
 constexpr uint32_t GOOD = 0x55DD55;      // Positive change, low UV, ...
@@ -24,7 +24,7 @@ constexpr uint32_t ALERT = 0xFF4444;     // Due now, very high
 uint32_t tempColor(float celsius);
 
 // --- Fonts (built-in Montserrat + generated) ---
-extern const lv_font_t &small;  // 12px: labels
+extern const lv_font_t &small;  // 14px: labels (12px was unreadable)
 extern const lv_font_t &body;   // 16px: values
 extern const lv_font_t &digits; // 48px: big temperature (digits, -, ° only)
 

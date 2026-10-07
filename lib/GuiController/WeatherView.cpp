@@ -282,43 +282,58 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else if (forecastMode == 0) {
     // === CURRENT WEATHER: hero (icon + big temperature) over a details grid
 
-    // Hero icon
-    lv_obj_t *icon_wrap = lv_obj_create(bg_grad);
-    lv_obj_remove_style_all(icon_wrap);
-    lv_obj_set_size(icon_wrap, 84, 84);
-    lv_obj_set_pos(icon_wrap, 8, 42);
-    lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    // Hero: icon + text column (temperature, description, H/L) as one group,
+    // centred on the screen, with the icon centred on the column's height
+    auto plainBox = [](lv_obj_t *parent) {
+      lv_obj_t *o = lv_obj_create(parent);
+      lv_obj_remove_style_all(o); // No padding, border or background
+      lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+      return o;
+    };
+
+    lv_obj_t *hero = plainBox(bg_grad);
+    lv_obj_set_size(hero, LV_PCT(100), 104);
+    lv_obj_set_pos(hero, 0, 40);
+    lv_obj_set_flex_flow(hero, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(hero, 10, 0);
+
     // Meteocons fill only ~45 of their 64px; scale 1.25x so the icon holds
     // its own next to the big digits
+    lv_obj_t *icon_wrap = plainBox(hero);
+    lv_obj_set_size(icon_wrap, 84, 84);
     lv_obj_t *hero_icon =
         createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
     lv_img_set_zoom(hero_icon, 320);
 
-    // Big temperature in whole degrees (the decimal is false precision)
+    lv_obj_t *col = plainBox(hero);
+    lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 4, 0);
+
+    // Temperature (whole degrees; the decimal is false precision) with a
+    // small arrow if tomorrow is >= 1 degree warmer / cooler
+    lv_obj_t *temp_row = plainBox(col);
+    lv_obj_set_size(temp_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(temp_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(temp_row, 4, 0);
+
     snprintf(buf, sizeof(buf), "%d\xC2\xB0", (int)lroundf(data.currentTemp));
-    lv_obj_t *temp_lbl = Theme::label(bg_grad, buf, &Theme::digits,
-                                      Theme::tempColor(data.currentTemp));
-    lv_obj_set_pos(temp_lbl, 100, 38);
+    Theme::label(temp_row, buf, &Theme::digits,
+                 Theme::tempColor(data.currentTemp));
 
-    // Tomorrow warmer / cooler (by >= 1 degree); nothing when about the same
     float diff = data.daily[1].maxTemp - data.daily[0].maxTemp;
-    if (data.daily[1].date.length() > 0 && fabsf(diff) >= 1.0f) {
-      lv_obj_t *arrow =
-          Theme::label(bg_grad, diff > 0 ? LV_SYMBOL_UP : LV_SYMBOL_DOWN,
-                       &lv_font_montserrat_14, diff > 0 ? 0xFF7755 : 0x6688FF);
-      lv_obj_align_to(arrow, temp_lbl, LV_ALIGN_OUT_RIGHT_TOP, 4, 10);
-    }
+    if (data.daily[1].date.length() > 0 && fabsf(diff) >= 1.0f)
+      Theme::label(temp_row, diff > 0 ? LV_SYMBOL_UP : LV_SYMBOL_DOWN,
+                   &lv_font_montserrat_14, diff > 0 ? 0xFF7755 : 0x6688FF);
 
-    lv_obj_t *desc = Theme::label(bg_grad, getWeatherDesc(data.currentWeatherCode),
-                                  &Theme::body, Theme::TEXT);
-    lv_obj_set_width(desc, 132);
-    lv_label_set_long_mode(desc, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(desc, 102, 98);
+    Theme::label(col, getWeatherDesc(data.currentWeatherCode), &Theme::body,
+                 Theme::TEXT);
 
     snprintf(buf, sizeof(buf), "H %.0f\xC2\xB0  \xC2\xB7  L %.0f\xC2\xB0",
              data.daily[0].maxTemp, data.daily[0].minTemp);
-    lv_obj_t *hl = Theme::label(bg_grad, buf, &Fonts::text14, Theme::TEXT_DIM);
-    lv_obj_set_pos(hl, 102, 120);
+    Theme::label(col, buf, &Fonts::text14, Theme::TEXT_DIM);
 
     Theme::divider(bg_grad, 10, 148, 220);
 

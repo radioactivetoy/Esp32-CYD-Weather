@@ -1,12 +1,12 @@
 #include "Theme.h"
 
-LV_FONT_DECLARE(lv_font_montserrat_12);
+LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(montserrat_digits_48);
 
 namespace Theme {
 
-const lv_font_t &small = lv_font_montserrat_12;
+const lv_font_t &small = lv_font_montserrat_14;
 const lv_font_t &body = lv_font_montserrat_16;
 const lv_font_t &digits = montserrat_digits_48;
 
@@ -49,7 +49,7 @@ void cell(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, const char *labelText,
   lv_obj_set_pos(l, x, y);
   // Values are numbers, units and ASCII words ("°" is in the built-in font)
   lv_obj_t *v = label(parent, value, &body, valueColor);
-  lv_obj_set_pos(v, x, y + 15);
+  lv_obj_set_pos(v, x, y + 16);
 }
 
 } // namespace Theme
