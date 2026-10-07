@@ -108,19 +108,18 @@ lv_obj_t *WeatherView::createWeatherIcon(lv_obj_t *parent, int code,
 }
 
 // --- Shared styles for the hourly / daily list rows ---
-// The hourly list has 12 rows of 5-6 objects. Setting each property on each
-// object allocates a private style per object (about 1.5KB per row in
-// practice); these styles are created once and only referenced by the rows.
-static lv_style_t styleRow;      // Border + background opacity
-static lv_style_t styleRowEven;  // Background colour, alternating
-static lv_style_t styleRowOdd;
-static lv_style_t styleIconBox;  // 40x40 holder for the zoomed icon
-static lv_style_t styleTimeCol;  // White, fixed width
-static lv_style_t styleRainCol;  // Blue, small, centred, fixed width
-static lv_style_t styleTrendCol; // Centred, fixed width
-static lv_style_t styleTrendUp;
-static lv_style_t styleTrendDown;
-static lv_style_t styleTempCol; // White
+// Setting each property on each object allocates a private style per object;
+// these are created once and only referenced. Rows themselves come from
+// Theme::row (hairline on top, flex row).
+static lv_style_t styleIconBox;  // Holder for the zoomed list icon
+static lv_style_t styleTimeCol;  // Hourly: time, dim
+static lv_style_t styleRainCol;  // Hourly: rain %, blue, right-aligned
+static lv_style_t styleTempCol;  // Hourly: temperature, fills the rest, right
+static lv_style_t styleDayCol;   // Daily: day + rain stacked
+static lv_style_t styleLowCol;   // Daily: low, dim, right-aligned
+static lv_style_t styleHighCol;  // Daily: high, right-aligned
+static lv_style_t styleTrack;    // Daily: low..high bar track
+static lv_style_t styleFill;     // Daily: bar fill (colour set per row)
 
 static void initListStyles() {
   static bool done = false;
@@ -128,41 +127,57 @@ static void initListStyles() {
     return;
   done = true;
 
-  lv_style_init(&styleRow);
-  lv_style_set_bg_opa(&styleRow, LV_OPA_80);
-  lv_style_set_border_width(&styleRow, 2);
-  lv_style_set_border_color(&styleRow, lv_color_hex(0xAAAAAA));
-  lv_style_set_border_opa(&styleRow, LV_OPA_70);
-
-  lv_style_init(&styleRowEven);
-  lv_style_set_bg_color(&styleRowEven, lv_color_hex(0x181818));
-  lv_style_init(&styleRowOdd);
-  lv_style_set_bg_color(&styleRowOdd, lv_color_hex(0x2A2A2A));
-
+  // Meteocons fill ~70% of their box: 64px zoomed to 44px, clipped to the
+  // 36px row height only through its transparent margin
   lv_style_init(&styleIconBox);
   lv_style_set_width(&styleIconBox, 40);
-  lv_style_set_height(&styleIconBox, 40);
+  lv_style_set_height(&styleIconBox, 36);
 
   lv_style_init(&styleTimeCol);
-  lv_style_set_width(&styleTimeCol, 60);
-  lv_style_set_text_color(&styleTimeCol, lv_color_hex(0xFFFFFF));
+  lv_style_set_width(&styleTimeCol, 50);
+  lv_style_set_text_font(&styleTimeCol, &Theme::body);
+  lv_style_set_text_color(&styleTimeCol, lv_color_hex(Theme::TEXT_DIM));
 
   lv_style_init(&styleRainCol);
-  lv_style_set_width(&styleRainCol, 40);
-  lv_style_set_text_align(&styleRainCol, LV_TEXT_ALIGN_CENTER);
-  lv_style_set_text_color(&styleRainCol, lv_color_hex(0x00BFFF));
-  lv_style_set_text_font(&styleRainCol, &lv_font_montserrat_14);
-
-  lv_style_init(&styleTrendCol);
-  lv_style_set_width(&styleTrendCol, 20);
-  lv_style_set_text_align(&styleTrendCol, LV_TEXT_ALIGN_CENTER);
-  lv_style_init(&styleTrendUp);
-  lv_style_set_text_color(&styleTrendUp, lv_color_hex(0xFF5555));
-  lv_style_init(&styleTrendDown);
-  lv_style_set_text_color(&styleTrendDown, lv_color_hex(0x5555FF));
+  lv_style_set_width(&styleRainCol, 44);
+  lv_style_set_text_align(&styleRainCol, LV_TEXT_ALIGN_RIGHT);
+  lv_style_set_text_font(&styleRainCol, &Theme::small);
+  lv_style_set_text_color(&styleRainCol, lv_color_hex(Theme::RAIN));
 
   lv_style_init(&styleTempCol);
-  lv_style_set_text_color(&styleTempCol, lv_color_hex(0xFFFFFF));
+  lv_style_set_flex_grow(&styleTempCol, 1);
+  lv_style_set_text_align(&styleTempCol, LV_TEXT_ALIGN_RIGHT);
+  lv_style_set_text_font(&styleTempCol, &Theme::body);
+  lv_style_set_text_color(&styleTempCol, lv_color_hex(Theme::TEXT));
+
+  lv_style_init(&styleDayCol);
+  lv_style_set_width(&styleDayCol, 52);
+  lv_style_set_layout(&styleDayCol, LV_LAYOUT_FLEX);
+  lv_style_set_flex_flow(&styleDayCol, LV_FLEX_FLOW_COLUMN);
+
+  lv_style_init(&styleLowCol);
+  lv_style_set_width(&styleLowCol, 30);
+  lv_style_set_text_align(&styleLowCol, LV_TEXT_ALIGN_RIGHT);
+  lv_style_set_text_font(&styleLowCol, &Theme::body);
+  lv_style_set_text_color(&styleLowCol, lv_color_hex(Theme::TEXT_DIM));
+
+  lv_style_init(&styleHighCol);
+  lv_style_set_width(&styleHighCol, 32);
+  lv_style_set_text_align(&styleHighCol, LV_TEXT_ALIGN_RIGHT);
+  lv_style_set_text_font(&styleHighCol, &Theme::body);
+  lv_style_set_text_color(&styleHighCol, lv_color_hex(Theme::TEXT));
+
+  lv_style_init(&styleTrack);
+  lv_style_set_flex_grow(&styleTrack, 1);
+  lv_style_set_height(&styleTrack, 4);
+  lv_style_set_radius(&styleTrack, 2);
+  lv_style_set_bg_opa(&styleTrack, LV_OPA_COVER);
+  lv_style_set_bg_color(&styleTrack, lv_color_hex(Theme::DIVIDER));
+
+  lv_style_init(&styleFill);
+  lv_style_set_height(&styleFill, 4);
+  lv_style_set_radius(&styleFill, 2);
+  lv_style_set_bg_opa(&styleFill, LV_OPA_COVER);
 }
 
 void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
@@ -210,63 +225,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   // lastUpdate == 0: no successful fetch for this city yet (placeholder)
   bool noData = (data.lastUpdate == 0);
 
-  // === COMMON HEADER ===
-  lv_obj_t *header_row = lv_obj_create(bg_grad);
-  lv_obj_set_size(header_row, LV_PCT(100), 40);
-  lv_obj_align(header_row, LV_ALIGN_TOP_MID, 0, 0);
-  lv_obj_set_style_bg_opa(header_row, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(header_row, 0, 0);
-  lv_obj_set_style_pad_all(header_row, 5, 0);
-  lv_obj_clear_flag(header_row, LV_OBJ_FLAG_SCROLLABLE);
+  // === HEADER === (city name; Hourly / Daily say so in the subtitle)
+  lv_obj_t *header_row = GuiController::createHeader(
+      bg_grad, data.cityName.length() > 0 ? data.cityName.c_str() : "Unknown",
+      GuiController::cityCount, GuiController::getCityIndex());
   // Long press: body = refresh now, header = device info
   GuiController::attachLongPress(bg_grad, header_row);
-
-  lv_obj_t *city_lbl = lv_label_create(header_row);
-  lv_obj_set_width(city_lbl, 160); // Reduced to 160 as per user request
-  lv_label_set_long_mode(city_lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
-  lv_obj_set_style_text_color(city_lbl, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_text_font(city_lbl, &Fonts::text20, 0); // Accents: "Vallès"
-  lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
-
-  // Which city of several (swipe left/right)
-  GuiController::createPageDots(header_row, GuiController::cityCount,
-                                GuiController::getCityIndex());
-
-  String titleText = String(data.cityName.length() > 0
-                                ? GuiController::sanitize(data.cityName).c_str()
-                                : "Unknown");
-  if (forecastMode == 1)
-    titleText += " - Hourly";
-  else if (forecastMode == 2)
-    titleText += " - Daily";
-  lv_label_set_text(city_lbl, titleText.c_str());
-
-  struct tm timeinfo;
-  lv_obj_t *time_lbl = lv_label_create(header_row);
-  if (getLocalTime(&timeinfo, 10)) {
-    char timeStr[16];
-    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-    lv_label_set_text(time_lbl, timeStr);
-  } else {
-    lv_label_set_text(time_lbl, "--:--");
-  }
-  lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xDDDDDD), 0);
-  lv_obj_set_style_text_font(time_lbl, &lv_font_montserrat_20, 0);
-  lv_obj_align(time_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
-  GuiController::setActiveTimeLabel(time_lbl);
-
-  // Status Dot
-  lv_obj_t *dot = lv_obj_create(header_row);
-  lv_obj_set_size(dot, 10, 8); // Wider
-  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_border_width(dot, 0, 0);
-  lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -7, 0);
-  lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-
-  // Green fresh / yellow updating / red stale; recoloured in place later
-  lv_obj_set_style_bg_color(dot, lv_color_hex(GuiController::statusDotColor()),
-                            0);
-  GuiController::setStatusDot(dot);
 
   if (noData) {
     // === NO DATA YET === (keeps gestures working while we wait)
@@ -401,116 +365,118 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                 data.sunset.length() ? data.sunset.c_str() : "--:--");
 
   } else if (forecastMode == 1 || forecastMode == 2) {
-    // === LIST VIEWS ===
+    // === LIST VIEWS === hairline rows under a subtitle
     bool isHourly = (forecastMode == 1);
-
-    lv_obj_t *list = lv_obj_create(bg_grad);
-    lv_obj_set_size(list, LV_PCT(100), 260);
-    lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(list, 0, 0);
-    lv_obj_set_style_pad_all(list, 0, 0);
-    lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE);
-
     initListStyles();
 
-    // Hourly shows 12 rows (each row costs ~1.3KB of heap): OWM's 3-hour
-    // slots cover 36h; Open-Meteo's 1-hour slots are shown every 2nd hour
-    // to still cover 24h.
+    // Hourly shows 12 rows (heap): OWM's 3-hour slots cover 36h; Open-Meteo's
+    // 1-hour slots are shown every 2nd hour to still cover 24h.
     const int hourStride = (data.hourlyStepHours == 1) ? 2 : 1;
-    int count = isHourly ? 12 : 7;
+    int days = 0;
+    while (days < 7 && data.daily[days].date.length() > 0)
+      days++;
+
+    if (isHourly) {
+      snprintf(buf, sizeof(buf), "Next %d hours",
+               12 * hourStride * data.hourlyStepHours);
+    } else {
+      snprintf(buf, sizeof(buf), "%d days", days);
+    }
+    Theme::subtitle(bg_grad, buf);
+
+    lv_obj_t *list = Theme::list(bg_grad, Theme::CONTENT_Y);
+
+    // Week range for the daily low..high bars (shared scale)
+    float weekMin = 100, weekMax = -100;
+    for (int i = 0; i < days; i++) {
+      weekMin = min(weekMin, data.daily[i].minTemp);
+      weekMax = max(weekMax, data.daily[i].maxTemp);
+    }
+    float weekRange = max(weekMax - weekMin, 1.0f);
+
+    auto addIcon = [](lv_obj_t *row, int code, bool night) {
+      lv_obj_t *box = Theme::plainBox(row);
+      lv_obj_add_style(box, &styleIconBox, 0);
+      lv_obj_t *icon = createWeatherIcon(box, code, night);
+      lv_img_set_zoom(icon, 176); // 64px -> 44px
+    };
+
+    int count = isHourly ? 12 : days;
     for (int i = 0; i < count; i++) {
-      int h = isHourly ? i * hourStride : 0; // Index into data.hourly
-      if (h >= 24)
-        break;
-      // Providers fill fewer slots than we have room for (OWM: ~6 days)
-      if (isHourly ? data.hourly[h].time.isEmpty()
-                   : data.daily[i].date.isEmpty())
-        break;
+      lv_obj_t *row = Theme::row(list, 36);
 
-      lv_obj_t *row = lv_obj_create(list);
-      lv_obj_set_size(row, LV_PCT(100), 45);
-      lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-      lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                            LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-      lv_obj_add_style(row, &styleRow, 0);
-      lv_obj_add_style(row, (i % 2) ? &styleRowOdd : &styleRowEven, 0);
-      lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-      lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE);
-
-      // Time/Day
-      lv_obj_t *time_lbl = lv_label_create(row);
-      lv_obj_add_style(time_lbl, &styleTimeCol, 0);
       if (isHourly) {
-        if (data.hourly[h].time.length() > 10)
-          lv_label_set_text(time_lbl,
-                            data.hourly[h].time.substring(11, 16).c_str());
-        else
-          lv_label_set_text(time_lbl, "--:--");
+        int h = i * hourStride; // Index into data.hourly
+        if (h >= 24 || data.hourly[h].time.isEmpty()) {
+          lv_obj_del(row);
+          break;
+        }
+        const HourlyForecast &hf = data.hourly[h];
+
+        lv_obj_t *t = lv_label_create(row);
+        lv_obj_add_style(t, &styleTimeCol, 0);
+        lv_label_set_text(t, hf.time.length() > 10
+                                 ? hf.time.substring(11, 16).c_str()
+                                 : "--:--");
+
+        addIcon(row, hf.weatherCode, hf.isNight);
+
+        lv_obj_t *rain = lv_label_create(row);
+        lv_obj_add_style(rain, &styleRainCol, 0);
+        if (hf.pop >= 0.1f) { // Only when likely enough to matter
+          snprintf(buf, sizeof(buf), "%.0f%%", hf.pop * 100.0f);
+          lv_label_set_text(rain, buf);
+        } else {
+          lv_label_set_text(rain, "");
+        }
+
+        lv_obj_t *temp = lv_label_create(row);
+        lv_obj_add_style(temp, &styleTempCol, 0);
+        snprintf(buf, sizeof(buf), "%.0f\xC2\xB0", hf.temp);
+        lv_label_set_text(temp, buf);
       } else {
+        const DailyForecast &df = data.daily[i];
+
+        // Day name with the rain chance underneath (no room for its own
+        // column next to the bar)
+        lv_obj_t *dayCol = Theme::plainBox(row);
+        lv_obj_add_style(dayCol, &styleDayCol, 0);
+        lv_obj_set_height(dayCol, LV_SIZE_CONTENT);
         char dateBuf[16];
         if (i == 0)
           snprintf(dateBuf, sizeof(dateBuf), "Today");
         else
-          formatDate(data.daily[i].date.c_str(), dateBuf); // "Wed 8"
-        lv_label_set_text(time_lbl, dateBuf);
-      }
-
-      // Icon: 64px image centred in a 40x40 box and zoomed to fit. (Sizing
-      // the image object itself to 40x40 makes LVGL tile and offset it.)
-      lv_obj_t *icon_box = lv_obj_create(row);
-      lv_obj_remove_style_all(icon_box); // Transparent, no border/padding
-      lv_obj_add_style(icon_box, &styleIconBox, 0);
-      lv_obj_clear_flag(icon_box,
-                        LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-      lv_obj_t *icon = createWeatherIcon(
-          icon_box,
-          isHourly ? data.hourly[h].weatherCode : data.daily[i].weatherCode,
-          isHourly && data.hourly[h].isNight); // Daily: day icon
-      lv_img_set_zoom(icon, 160);
-
-      // Rain Prob (List)
-      float pop = isHourly ? data.hourly[h].pop : data.daily[i].pop;
-      lv_obj_t *rain_lbl = lv_label_create(row);
-      lv_obj_add_style(rain_lbl, &styleRainCol, 0);
-      if (pop >= 0.1) { // Show if > 10%
-        char rainBuf[16];
-        snprintf(rainBuf, sizeof(rainBuf), "%.0f%%", pop * 100.0);
-        lv_label_set_text(rain_lbl, rainBuf);
-      } else {
-        lv_label_set_text(rain_lbl, "");
-      }
-
-      // Trend
-      if (!isHourly) {
-        lv_obj_t *trend_lbl = lv_label_create(row);
-        lv_obj_add_style(trend_lbl, &styleTrendCol, 0);
-        if (i > 0) {
-          float diff = data.daily[i].maxTemp - data.daily[i - 1].maxTemp;
-          if (diff >= 1.0) {
-            lv_label_set_text(trend_lbl, LV_SYMBOL_UP);
-            lv_obj_add_style(trend_lbl, &styleTrendUp, 0);
-          } else if (diff <= -1.0) {
-            lv_label_set_text(trend_lbl, LV_SYMBOL_DOWN);
-            lv_obj_add_style(trend_lbl, &styleTrendDown, 0);
-          } else {
-            lv_label_set_text(trend_lbl, "");
-          }
-        } else {
-          lv_label_set_text(trend_lbl, "");
+          formatDate(df.date.c_str(), dateBuf); // "Wed 8"
+        Theme::label(dayCol, dateBuf, &Theme::body, Theme::TEXT);
+        if (df.pop >= 0.1f) {
+          snprintf(buf, sizeof(buf), "%.0f%%", df.pop * 100.0f);
+          Theme::label(dayCol, buf, &Theme::small, Theme::RAIN);
         }
-      }
 
-      // Temp
-      lv_obj_t *temp_lbl = lv_label_create(row);
-      if (isHourly)
-        snprintf(buf, sizeof(buf), "%.1f°", data.hourly[h].temp);
-      else
-        snprintf(buf, sizeof(buf), "%.0f°/%.0f°", data.daily[i].minTemp,
-                 data.daily[i].maxTemp);
-      lv_label_set_text(temp_lbl, buf);
-      lv_obj_add_style(temp_lbl, &styleTempCol, 0);
+        addIcon(row, df.weatherCode, false);
+
+        lv_obj_t *lo = lv_label_create(row);
+        lv_obj_add_style(lo, &styleLowCol, 0);
+        snprintf(buf, sizeof(buf), "%.0f\xC2\xB0", df.minTemp);
+        lv_label_set_text(lo, buf);
+
+        // Low..high on the week's scale
+        lv_obj_t *track = Theme::plainBox(row);
+        lv_obj_add_style(track, &styleTrack, 0);
+        lv_obj_t *fill = Theme::plainBox(track);
+        lv_obj_add_style(fill, &styleFill, 0);
+        lv_obj_set_style_bg_color(fill, lv_color_hex(Theme::tempColor(df.maxTemp)),
+                                  0);
+        int x = (int)((df.minTemp - weekMin) * 100.0f / weekRange);
+        int w = (int)((df.maxTemp - df.minTemp) * 100.0f / weekRange);
+        lv_obj_set_x(fill, lv_pct(constrain(x, 0, 96)));
+        lv_obj_set_width(fill, lv_pct(constrain(w, 4, 100 - x)));
+
+        lv_obj_t *hi = lv_label_create(row);
+        lv_obj_add_style(hi, &styleHighCol, 0);
+        snprintf(buf, sizeof(buf), "%.0f\xC2\xB0", df.maxTemp);
+        lv_label_set_text(hi, buf);
+      }
     }
 
     // Keep the scroll position when this same list is rebuilt with new data

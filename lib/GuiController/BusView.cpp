@@ -2,6 +2,7 @@
 #include "DataManager.h"
 #include "GuiController.h"
 #include "NetworkManager.h"
+#include "Theme.h"
 #include <cstdio>
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
@@ -42,13 +43,14 @@ static void setEtaLabel(lv_obj_t *label, int seconds) {
   lv_label_set_text(label, buf);
 
   int mins = seconds / 60;
-  uint32_t col = 0x00FF00;
+  // Colour only when it matters: due now / within 2 / within 5 minutes
+  uint32_t col = Theme::TEXT;
   if (seconds < 60)
-    col = 0xFF2222; // Due now
+    col = Theme::ALERT;
   else if (mins <= 2)
-    col = 0xFF4500;
+    col = 0xFF9900;
   else if (mins <= 5)
-    col = 0xFFFF00;
+    col = Theme::WARN;
   lv_obj_set_style_text_color(label, lv_color_hex(col), 0);
 }
 
@@ -117,79 +119,29 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_add_event_cb(new_scr, GuiController::handleScreenClick,
                       LV_EVENT_SHORT_CLICKED, NULL); // Not after a long press
 
-  lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(new_scr, lv_color_hex(Theme::BG), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
 
-  // HEADER
-  lv_obj_t *header = lv_obj_create(new_scr);
-  lv_obj_set_size(header, LV_PCT(100), 40);
-  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
-  lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, 0); // Transparent like others
-  lv_obj_set_style_border_width(header, 0, 0);
-  lv_obj_set_style_pad_all(header, 5, 0);
-  lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+  // Header: stop name (or code until the name is known), dots per stop
+  String title = data.stopName.length() > 0 ? data.stopName
+                                            : String("Stop ") + data.stopCode;
+  lv_obj_t *header =
+      GuiController::createHeader(new_scr, title.c_str(),
+                                  GuiController::busStopCount,
+                                  GuiController::getBusIndex());
   // Long press: body = refresh now, header = device info
   GuiController::attachLongPress(new_scr, header);
 
-  lv_obj_t *title = lv_label_create(header);
-  if (data.stopName.length() > 0) {
-    lv_label_set_text(title, GuiController::sanitize(data.stopName).c_str());
-  } else {
-    lv_label_set_text_fmt(title, "Stop: %s", data.stopCode.c_str());
-  }
+  char buf[48];
+  if (GuiController::busStopCount > 1)
+    snprintf(buf, sizeof(buf), "Stop %s \xC2\xB7 tap for next stop",
+             data.stopCode.c_str());
+  else
+    snprintf(buf, sizeof(buf), "Stop %s", data.stopCode.c_str());
+  lv_obj_t *sub = Theme::subtitle(new_scr, buf);
+  lv_obj_set_style_text_font(sub, &Fonts::text14, 0); // "·"
 
-  lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
-  lv_obj_set_width(title, 160);
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_text_font(title, &Fonts::text20, 0); // Accents: "Plaça"
-  Serial.println("BusView: Title Set");
-  lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0); // Left Aligned (No Icon)
-
-  // Which stop of several (tap to switch)
-  GuiController::createPageDots(header, GuiController::busStopCount,
-                                GuiController::getBusIndex());
-
-  // Time
-  struct tm timeinfo;
-  lv_obj_t *time_lb = lv_label_create(header);
-  if (getLocalTime(&timeinfo, 10)) {
-    char timeStr[32];
-    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-    lv_label_set_text(time_lb, timeStr);
-  } else {
-    lv_label_set_text(time_lb, "--:--");
-  }
-  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xDDDDDD), 0);
-  lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20, 0);
-  lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0); // Top aligned
-  GuiController::setActiveTimeLabel(time_lb);
-
-  // Status Dot
-  lv_obj_t *dot = lv_obj_create(header);
-  lv_obj_set_size(dot, 10, 8); // Wider (was 8x8)
-  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_border_width(dot, 0, 0);
-  lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0);
-  lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-
-  // Green fresh / yellow updating / red stale; recoloured in place later
-  lv_obj_set_style_bg_color(dot, lv_color_hex(GuiController::statusDotColor()),
-                            0);
-  GuiController::setStatusDot(dot);
-  Serial.println("BusView: Time & Dot Created");
-
-  // List
-  lv_obj_t *list = lv_obj_create(new_scr);
-  Serial.println("BusView: List Created");
-  lv_obj_set_size(list, LV_PCT(100), 280);
-  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40);
-  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_border_width(list, 0, 0);
-  lv_obj_set_style_pad_all(list, 0, 0);
-  lv_obj_set_style_pad_row(list, 0, 0);
-  lv_obj_add_flag(list, LV_OBJ_FLAG_GESTURE_BUBBLE);
-  lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
+  lv_obj_t *list = Theme::list(new_scr, Theme::CONTENT_Y);
 
   if (data.arrivals.empty()) {
     const char *msg;
@@ -203,69 +155,43 @@ void BusView::show(const BusData &data, int anim) {
     else
       msg = "Can't reach TMB.\nCheck the App ID / Key.\nRetrying soon.";
 
-    lv_obj_t *lbl = lv_label_create(list);
-    lv_label_set_text(lbl, msg);
+    lv_obj_t *lbl = Theme::label(list, msg, &Theme::body, Theme::TEXT_DIM);
     lv_obj_set_width(lbl, LV_PCT(100));
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xAAAAAA), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_pad_top(lbl, 80, 0);
-    Serial.println("BusView: Empty List");
+    lv_obj_set_style_pad_top(lbl, 70, 0);
   } else {
     int idx = 0;
-    int limit = MAX_ROWS;
     for (const auto &arr : data.arrivals) {
-      if (idx >= limit)
+      if (idx >= MAX_ROWS)
         break;
 
-      lv_obj_t *row = lv_obj_create(list);
-      if (!row)
-        break;
-      lv_obj_set_size(row, LV_PCT(100), 44);
-      lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-      lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                            LV_FLEX_ALIGN_CENTER);
-      lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks from row
+      lv_obj_t *row = Theme::row(list, 40);
 
-      uint32_t bg_col =
-          (idx % 2 == 0) ? 0x181818 : 0x2A2A2A;
-      lv_obj_set_style_bg_color(row, lv_color_hex(bg_col), 0);
-      lv_obj_set_style_border_width(row, 2, 0); // Increased 1->2
-      lv_obj_set_style_border_color(row, lv_color_hex(0xAAAAAA), 0);
-      lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
-      lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-      lv_obj_set_style_pad_all(row, 5, 0);
-      lv_obj_set_style_pad_column(row, 8, 0);
-
+      // Line badge in TMB's colours (the colour means something here)
       lv_color_t txtCol;
       lv_color_t badgeCol = getBusLineColor(arr.line, txtCol);
-
-      lv_obj_t *lineBox = lv_obj_create(row);
-      lv_obj_set_size(lineBox, 40, 28);
-      lv_obj_set_style_bg_color(lineBox, badgeCol, 0);
-      lv_obj_set_style_radius(lineBox, 4, 0);
-      lv_obj_set_style_border_width(lineBox, 0, 0);
-      lv_obj_clear_flag(lineBox,
-                        LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-
-      lv_obj_t *lineLbl = lv_label_create(lineBox);
+      lv_obj_t *badge = Theme::plainBox(row);
+      lv_obj_set_size(badge, 40, 24);
+      lv_obj_set_style_radius(badge, 4, 0);
+      lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
+      lv_obj_set_style_bg_color(badge, badgeCol, 0);
+      lv_obj_t *lineLbl = lv_label_create(badge);
       lv_label_set_text(lineLbl, arr.line.c_str());
-      lv_obj_center(lineLbl);
       lv_obj_set_style_text_color(lineLbl, txtCol, 0);
       lv_obj_set_style_text_font(lineLbl, &lv_font_montserrat_14, 0);
+      lv_obj_center(lineLbl);
 
-      lv_obj_t *dest = lv_label_create(row);
-      lv_label_set_text(dest, GuiController::sanitize(arr.destination).c_str());
+      lv_obj_t *dest = Theme::label(
+          row, GuiController::sanitize(arr.destination).c_str(),
+          &Fonts::text16, Theme::TEXT); // Accents: "Plaça"
       lv_obj_set_flex_grow(dest, 1);
       lv_label_set_long_mode(dest, LV_LABEL_LONG_SCROLL_CIRCULAR);
-      lv_obj_set_style_text_color(dest, lv_color_hex(0xFFFFFF), 0);
-      lv_obj_set_style_text_font(dest, &Fonts::text14, 0); // Accents
 
       lv_obj_t *timeLbl = lv_label_create(row);
-      lv_obj_set_width(timeLbl, 55);
+      lv_obj_set_width(timeLbl, 58);
       lv_obj_set_style_text_align(timeLbl, LV_TEXT_ALIGN_RIGHT, 0);
-      lv_obj_set_style_text_font(timeLbl, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(timeLbl, &Theme::body, 0);
       // No opacity pulse here: an LV_ANIM_REPEAT_INFINITE anim on a child
       // can fire after auto_del frees the old screen.
       setEtaLabel(timeLbl, remainingSeconds(arr.seconds));

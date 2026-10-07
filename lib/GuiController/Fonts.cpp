@@ -1,13 +1,16 @@
 #include "Fonts.h"
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
+LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(montserrat_latin1_14);
+LV_FONT_DECLARE(montserrat_latin1_16);
 LV_FONT_DECLARE(montserrat_latin1_20);
 
 namespace Fonts {
 
 lv_font_t text14;
+lv_font_t text16;
 lv_font_t text20;
 
 // RAM copy of a built-in font with the fallback attached. Line metrics are
@@ -24,6 +27,7 @@ static void makeFont(lv_font_t &out, const lv_font_t &base,
 
 void init() {
   makeFont(text14, lv_font_montserrat_14, montserrat_latin1_14);
+  makeFont(text16, lv_font_montserrat_16, montserrat_latin1_16);
   makeFont(text20, lv_font_montserrat_20, montserrat_latin1_20);
 }
 

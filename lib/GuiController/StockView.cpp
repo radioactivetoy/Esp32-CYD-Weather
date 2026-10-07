@@ -2,6 +2,7 @@
 #include "DataManager.h"
 #include "GuiController.h"
 #include "NetworkManager.h"
+#include "Theme.h"
 #include <cstdio>
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
@@ -47,137 +48,71 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_add_event_cb(new_scr, GuiController::handleScreenClick,
                       LV_EVENT_SHORT_CLICKED, NULL); // Not after a long press
 
-  lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(new_scr, lv_color_hex(Theme::BG), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
 
-  // Header
-  lv_obj_t *header = lv_obj_create(new_scr);
-  lv_obj_set_size(header, LV_PCT(100), 40);
-  lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(header, 0, 0);
-  lv_obj_set_style_pad_all(header, 5, 0);
-  lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_t *header = GuiController::createHeader(new_scr, "Markets", 0, 0);
   // Long press: body = refresh now, header = device info
   GuiController::attachLongPress(new_scr, header);
 
-  lv_obj_t *title = lv_label_create(header);
-  lv_label_set_text(title, "Market Ticker");
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFD700), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_20,
-                             0); // Title 20px
-  lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
-
-  // Time
-  struct tm timeinfo;
-  lv_obj_t *time_lb = lv_label_create(header);
-  if (getLocalTime(&timeinfo, 10)) {
-    char timeStr[32];
-    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-    lv_label_set_text(time_lb, timeStr);
+  // Subtitle: how many symbols and when they were last updated (local time,
+  // so it stays correct without being redrawn)
+  char buf[48];
+  uint32_t last = DataManager::getStockLastUpdate();
+  time_t nowT = time(nullptr);
+  if (last != 0 && nowT > 1700000000) {
+    time_t at = nowT - (time_t)((millis() - last) / 1000);
+    struct tm tmAt;
+    localtime_r(&at, &tmAt);
+    char hm[8];
+    strftime(hm, sizeof(hm), "%H:%M", &tmAt);
+    snprintf(buf, sizeof(buf), "%u symbols \xC2\xB7 updated %s",
+             (unsigned)data.size(), hm);
   } else {
-    lv_label_set_text(time_lb, "--:--");
+    snprintf(buf, sizeof(buf), "%u symbols", (unsigned)data.size());
   }
-  lv_obj_set_style_text_color(time_lb, lv_color_hex(0xDDDDDD), 0);
-  lv_obj_set_style_text_font(time_lb, &lv_font_montserrat_20,
-                             0); // Upgrade 14->20
-  lv_obj_align(time_lb, LV_ALIGN_TOP_RIGHT, 0, 0);
-  GuiController::setActiveTimeLabel(time_lb);
+  lv_obj_t *sub = Theme::subtitle(new_scr, buf);
+  lv_obj_set_style_text_font(sub, &Fonts::text14, 0); // "·"
 
-  // Status Dot
-  lv_obj_t *dot = lv_obj_create(header);
-  lv_obj_set_size(dot, 10, 8); // Wider
-  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_border_width(dot, 0, 0);
-  lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
-  lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-
-  // Green fresh / yellow updating / red stale; recoloured in place later
-  lv_obj_set_style_bg_color(dot, lv_color_hex(GuiController::statusDotColor()),
-                            0);
-  GuiController::setStatusDot(dot);
-
-  // List
-  lv_obj_t *list = lv_obj_create(new_scr);
-  lv_obj_set_size(list, LV_PCT(100), 280);
-  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 30);
-  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(list, 0, 0);
-  lv_obj_set_style_pad_all(list, 0, 0); // Fix: Remove default padding
-  lv_obj_set_style_pad_row(list, 2, 0);  // 5 rows x 54px + gaps fit in 280px
-  lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_t *list = Theme::list(new_scr, Theme::CONTENT_Y);
 
   if (data.empty()) {
-    lv_obj_t *lbl = lv_label_create(list);
-
-    String msg = "Loading...";
-    if (NetworkManager::getStockSymbols().length() == 0) {
-      msg = "No Symbols Configured";
-    } else {
-      msg = "No Data Received.\nCheck Network";
-    }
-
-    lv_label_set_text(lbl, msg.c_str());
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0x888888), 0);
+    const char *msg = NetworkManager::getStockSymbols().length() == 0
+                          ? "No symbols configured.\nAdd them in the web "
+                            "settings."
+                          : "No quotes received.\nRetrying soon.";
+    lv_obj_t *lbl = Theme::label(list, msg, &Theme::body, Theme::TEXT_DIM);
+    lv_obj_set_width(lbl, LV_PCT(100));
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_pad_top(lbl, 70, 0);
   } else {
     for (const auto &item : data) {
-      lv_obj_t *row = lv_obj_create(list);
-      // 54px: 5 symbols visible. Content height 54 - 2x2 border - 2x3 pad =
-      // 44px, enough for the price (25px) + change (16px) stack.
-      lv_obj_set_size(row, LV_PCT(100), 54);
-      lv_obj_set_style_pad_ver(row, 3, 0);
-      lv_obj_set_style_bg_color(row, lv_color_hex(0x2A2A2A), 0);
-      lv_obj_set_style_bg_opa(row, LV_OPA_80, 0);
-      lv_obj_set_style_border_color(row, lv_color_hex(0xAAAAAA), 0);
-      lv_obj_set_style_border_width(row, 2, 0);
-      lv_obj_set_style_border_opa(row, LV_OPA_70, 0);
-      lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-      lv_obj_add_flag(row,
-                      LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+      lv_obj_t *row = Theme::row(list, 46);
 
-      // Symbol (Company Name) - Size 20, Left Mid
-      lv_obj_t *sym = lv_label_create(row);
-      lv_label_set_text(sym, item.symbol.c_str());
-      lv_obj_set_style_text_color(sym, lv_color_hex(0xFFFFFF), 0);
-      lv_obj_set_style_text_font(sym, &lv_font_montserrat_20,
-                                 0); // 20px
-      lv_obj_align(sym, LV_ALIGN_LEFT_MID, 5, 0);
+      // Left: symbol over its currency
+      lv_obj_t *left = Theme::plainBox(row);
+      lv_obj_set_size(left, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+      lv_obj_set_flex_grow(left, 1);
+      lv_obj_set_flex_flow(left, LV_FLEX_FLOW_COLUMN);
+      Theme::label(left, item.symbol.c_str(), &Theme::body, Theme::TEXT);
+      if (item.currency.length() > 0)
+        Theme::label(left, item.currency.c_str(), &Theme::small,
+                     Theme::TEXT_DIM);
 
-      // Right Container (Price + Change)
-      lv_obj_t *right_box = lv_obj_create(row);
-      lv_obj_set_size(right_box, LV_SIZE_CONTENT, LV_PCT(100)); // Auto width
-      lv_obj_align(right_box, LV_ALIGN_RIGHT_MID, -10,
-                   0); // Added margin from right edge
-      lv_obj_set_flex_flow(right_box, LV_FLEX_FLOW_COLUMN);
-      lv_obj_set_flex_align(right_box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END,
-                            LV_FLEX_ALIGN_CENTER);
-      lv_obj_set_style_bg_opa(right_box, LV_OPA_TRANSP, 0);
-      lv_obj_set_style_border_width(right_box, 0, 0);
-      lv_obj_set_style_pad_all(right_box, 0, 0);
-      lv_obj_set_style_pad_row(right_box, 0, 0); // Remove gap to save space
-      lv_obj_clear_flag(right_box, LV_OBJ_FLAG_CLICKABLE);
+      // Right: price over the day's change (the only coloured value)
+      lv_obj_t *right = Theme::plainBox(row);
+      lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+      lv_obj_set_flex_flow(right, LV_FLEX_FLOW_COLUMN);
+      lv_obj_set_flex_align(right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END,
+                            LV_FLEX_ALIGN_END);
 
-      // Price - Size 20
-      lv_obj_t *price = lv_label_create(right_box);
-      char buf[32];
       formatPrice(buf, sizeof(buf), item.price, item.currency);
-      lv_label_set_text(price, buf);
-      lv_obj_set_style_text_color(price, lv_color_hex(0xFFFFFF), 0);
-      lv_obj_set_style_text_font(price, &Fonts::text20, 0); // Has € £ ¥
-      lv_obj_set_style_text_align(price, LV_TEXT_ALIGN_RIGHT, 0);
+      Theme::label(right, buf, &Fonts::text16, Theme::TEXT); // Has € £ ¥
 
-      // Change % - Size 16
-      lv_obj_t *change = lv_label_create(right_box);
       snprintf(buf, sizeof(buf), "%+.2f%%", item.changePercent);
-      lv_label_set_text(change, buf);
-      lv_color_t cColor = (item.changePercent >= 0) ? lv_color_hex(0x00FF00)
-                                                    : lv_color_hex(0xFF4444);
-      lv_obj_set_style_text_color(change, cColor, 0);
-      lv_obj_set_style_text_font(change, &lv_font_montserrat_14,
-                                 0); // 14px
-      lv_obj_set_style_text_align(change, LV_TEXT_ALIGN_RIGHT, 0);
+      Theme::label(right, buf, &Theme::small,
+                   item.changePercent >= 0 ? Theme::GOOD : Theme::BAD);
     }
 
     // Keep the scroll position when new quotes rebuild the list

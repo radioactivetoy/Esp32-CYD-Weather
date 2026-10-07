@@ -33,6 +33,10 @@ public:
   static String sanitize(const String &text); // Fit text to the UI fonts
   // "● ○ ○" page indicator aligned to the parent's bottom-left (count > 1)
   static void createPageDots(lv_obj_t *parent, int count, int active);
+  // Shared 40px header: title (accents OK), page dots, status dot and the
+  // live clock. Registers the clock and dot for in-place updates.
+  static lv_obj_t *createHeader(lv_obj_t *parent, const char *title,
+                                int pageCount, int activePage);
 
   static bool isBusScreenActive();
   static bool isStockScreenActive();

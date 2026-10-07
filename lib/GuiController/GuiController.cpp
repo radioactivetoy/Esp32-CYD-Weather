@@ -3,6 +3,7 @@
 #include "DataManager.h"
 #include "NetworkManager.h"
 #include "SystemMonitor.h"
+#include "Theme.h"
 #include "WeatherService.h"
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -180,6 +181,7 @@ void GuiController::init() {
   guiMutex = xSemaphoreCreateMutex();
   lv_init();
   Fonts::init();
+  Theme::init();
   tft.begin();
   tft.setRotation(0);
   lv_disp_draw_buf_init(&draw_buf, buf, NULL, screenWidth * drawBufLines);
@@ -417,7 +419,7 @@ void GuiController::drawLoadingScreen(const char *msg) {
 
   lv_obj_t *title = lv_label_create(scr);
   lv_label_set_text(title, "Weather Clock");
-  lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(Theme::TEXT), 0);
   lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
 
@@ -497,6 +499,44 @@ String GuiController::sanitize(const String &text) {
     i += len;
   }
   return out;
+}
+
+lv_obj_t *GuiController::createHeader(lv_obj_t *parent, const char *title,
+                                      int pageCount, int activePage) {
+  lv_obj_t *header = lv_obj_create(parent);
+  lv_obj_remove_style_all(header);
+  lv_obj_set_size(header, LV_PCT(100), 40);
+  lv_obj_set_pos(header, 0, 0);
+  lv_obj_set_style_pad_all(header, 5, 0);
+  lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *titleLbl =
+      Theme::label(header, sanitize(title).c_str(), &Fonts::text20, Theme::TEXT);
+  lv_obj_set_width(titleLbl, 158);
+  lv_label_set_long_mode(titleLbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
+  lv_obj_align(titleLbl, LV_ALIGN_TOP_LEFT, 0, 0);
+
+  createPageDots(header, pageCount, activePage);
+
+  char timeStr[8] = "--:--";
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo, 10))
+    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
+  lv_obj_t *timeLbl =
+      Theme::label(header, timeStr, &lv_font_montserrat_20, Theme::TEXT_SOFT);
+  lv_obj_align(timeLbl, LV_ALIGN_TOP_RIGHT, 0, 0);
+  setActiveTimeLabel(timeLbl);
+
+  // Green fresh / yellow updating / red stale; recoloured in place later
+  lv_obj_t *dot = Theme::plainBox(header);
+  lv_obj_set_size(dot, 10, 8);
+  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(dot, lv_color_hex(statusDotColor()), 0);
+  lv_obj_align_to(dot, timeLbl, LV_ALIGN_OUT_LEFT_MID, -7, 0);
+  setStatusDot(dot);
+
+  return header;
 }
 
 void GuiController::createPageDots(lv_obj_t *parent, int count, int active) {
@@ -745,10 +785,10 @@ static void onHeaderLongPress(lv_event_t *e) {
   lv_obj_t *overlay = lv_obj_create(lv_scr_act());
   lv_obj_set_size(overlay, 214, LV_SIZE_CONTENT);
   lv_obj_align(overlay, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_bg_color(overlay, lv_color_hex(0x111122), 0);
+  lv_obj_set_style_bg_color(overlay, lv_color_hex(0x1A1A1A), 0);
   lv_obj_set_style_bg_opa(overlay, LV_OPA_90, 0);
   lv_obj_set_style_radius(overlay, 12, 0);
-  lv_obj_set_style_border_color(overlay, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_border_color(overlay, lv_color_hex(Theme::DIVIDER), 0);
   lv_obj_set_style_border_width(overlay, 1, 0);
   lv_obj_set_style_pad_all(overlay, 10, 0);
   lv_obj_set_style_pad_row(overlay, 4, 0);
@@ -765,7 +805,7 @@ static void onHeaderLongPress(lv_event_t *e) {
   };
 
   char buf[64];
-  addLine("Device Info", 0xFFD700);
+  addLine("Device info", Theme::TEXT);
   String ssid = GuiController::sanitize(WiFi.SSID());
   snprintf(buf, sizeof(buf), "WiFi: %s (%d dBm)",
            ssid.length() ? ssid.c_str() : "---", st.rssi);
@@ -783,7 +823,7 @@ static void onHeaderLongPress(lv_event_t *e) {
   addLine(buf, 0xCCCCCC);
   snprintf(buf, sizeof(buf), "Build: %s", __DATE__);
   addLine(buf, 0xCCCCCC);
-  addLine("Tap to close", 0x777777);
+  addLine("Tap to close", Theme::TEXT_DIM);
 }
 
 void GuiController::attachLongPress(lv_obj_t *body, lv_obj_t *header) {

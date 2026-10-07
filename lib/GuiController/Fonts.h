@@ -11,6 +11,7 @@ namespace Fonts {
 void init(); // Call once after lv_init()
 
 extern lv_font_t text14;
+extern lv_font_t text16;
 extern lv_font_t text20;
 
 } // namespace Fonts

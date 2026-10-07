@@ -22,6 +22,54 @@ uint32_t tempColor(float c) {
   return TEXT;
 }
 
+// Shared by every list row (one style instead of per-row local properties)
+static lv_style_t styleRow;
+
+void init() {
+  lv_style_init(&styleRow);
+  lv_style_set_width(&styleRow, LV_PCT(100));
+  lv_style_set_border_side(&styleRow, LV_BORDER_SIDE_TOP);
+  lv_style_set_border_width(&styleRow, 1);
+  lv_style_set_border_color(&styleRow, lv_color_hex(DIVIDER));
+  lv_style_set_pad_column(&styleRow, 8);
+  lv_style_set_layout(&styleRow, LV_LAYOUT_FLEX);
+  lv_style_set_flex_flow(&styleRow, LV_FLEX_FLOW_ROW);
+  lv_style_set_flex_cross_place(&styleRow, LV_FLEX_ALIGN_CENTER);
+  lv_style_set_flex_track_place(&styleRow, LV_FLEX_ALIGN_CENTER);
+}
+
+lv_obj_t *plainBox(lv_obj_t *parent) {
+  lv_obj_t *o = lv_obj_create(parent);
+  lv_obj_remove_style_all(o);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+  return o;
+}
+
+lv_obj_t *subtitle(lv_obj_t *parent, const char *text) {
+  lv_obj_t *l = label(parent, text, &small, TEXT_DIM);
+  lv_obj_set_pos(l, SIDE, SUBTITLE_Y);
+  return l;
+}
+
+lv_obj_t *list(lv_obj_t *parent, lv_coord_t y) {
+  lv_obj_t *l = lv_obj_create(parent);
+  lv_obj_remove_style_all(l);
+  lv_obj_set_pos(l, SIDE, y);
+  lv_obj_set_size(l, 240 - 2 * SIDE, 320 - y);
+  lv_obj_set_flex_flow(l, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_scrollbar_mode(l, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_add_flag(l, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+  return l;
+}
+
+lv_obj_t *row(lv_obj_t *list, lv_coord_t h) {
+  lv_obj_t *r = plainBox(list);
+  lv_obj_add_style(r, &styleRow, 0);
+  lv_obj_set_height(r, h);
+  lv_obj_add_flag(r, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
+  return r;
+}
+
 lv_obj_t *label(lv_obj_t *parent, const char *text, const lv_font_t *font,
                 uint32_t color) {
   lv_obj_t *l = lv_label_create(parent);
