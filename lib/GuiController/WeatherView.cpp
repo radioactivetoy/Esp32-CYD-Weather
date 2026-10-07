@@ -112,7 +112,7 @@ lv_obj_t *WeatherView::createWeatherIcon(lv_obj_t *parent, int code,
 // these are created once and only referenced. Rows themselves come from
 // Theme::row (hairline on top, flex row).
 static lv_style_t styleIconBox;  // Holder for the zoomed list icon
-static lv_style_t styleTimeCol;  // Hourly: time, dim
+static lv_style_t styleTimeCol;  // Hourly: time, white like the daily day names
 static lv_style_t styleRainCol;  // Hourly: rain %, blue, right-aligned
 static lv_style_t styleTempCol;  // Hourly: temperature, fills the rest, right
 static lv_style_t styleDayCol;   // Daily: day + rain stacked
@@ -136,7 +136,7 @@ static void initListStyles() {
   lv_style_init(&styleTimeCol);
   lv_style_set_width(&styleTimeCol, 50);
   lv_style_set_text_font(&styleTimeCol, &Theme::body);
-  lv_style_set_text_color(&styleTimeCol, lv_color_hex(Theme::TEXT_DIM));
+  lv_style_set_text_color(&styleTimeCol, lv_color_hex(Theme::TEXT));
 
   lv_style_init(&styleRainCol);
   lv_style_set_width(&styleRainCol, 44);
