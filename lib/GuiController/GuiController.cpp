@@ -1,5 +1,6 @@
 #include "GuiController.h"
 #include "BusService.h"
+#include "DataManager.h"
 #include "NetworkManager.h"
 #include "WeatherService.h"
 #include <Arduino.h>
@@ -50,11 +51,6 @@ bool GuiController::consumeCityChanged() { return cityChanged.exchange(false); }
 bool GuiController::isBusScreenActive() { return currentApp == APP_BUS; }
 bool GuiController::isStockScreenActive() { return currentApp == APP_STOCK; }
 bool GuiController::isWeatherScreenActive() { return currentApp == APP_WEATHER; }
-void GuiController::updateWeatherCache(const WeatherData &data) { cachedWeather = data; }
-void GuiController::updateBusCache(const BusData &data) { cachedBus = data; }
-void GuiController::updateStockCache(const std::vector<StockItem> &data) {
-  cachedStock = data;
-}
 
 // Queue & Cache
 String GuiController::pendingMsg = "";
@@ -72,6 +68,107 @@ std::vector<StockItem> GuiController::cachedStock;
 static lv_obj_t *activeTimeLabel = NULL;
 static int forecastMode = 0; // 0: Current, 1: Hourly, 2: Daily, 3: Chart
 static uint32_t lastGestureTime = 0; // Used to suppress tap after swipe
+
+// --- In-place refresh state ---
+// Objects on the visible screen that are updated without a rebuild. Each is
+// cleared by an LV_EVENT_DELETE callback when LVGL deletes it (screen
+// auto_del after a transition, or lv_obj_clean), so they never dangle.
+static lv_obj_t *statusDot = NULL;
+static lv_obj_t *scrollList = NULL;
+static int scrollKey = -1;
+
+static bool touchDown = false;
+static uint32_t touchReleasedAt = 0;
+static const uint32_t TOUCH_SETTLE_MS = 250; // After release, before rebuild
+
+// A data source counts as stale (red dot) once it is this much older than
+// its normal refresh interval, so the dot doesn't flap red right before
+// every scheduled refresh.
+static const uint32_t WEATHER_STALE_MS = 20UL * 60000UL; // Refresh: 15 min
+static const uint32_t BUS_STALE_MS = 90000UL;            // Refresh: 60 s
+static const uint32_t STOCK_STALE_MS = 7UL * 60000UL;    // Refresh: 5 min
+
+static void onStatusDotDeleted(lv_event_t *e) {
+  if (lv_event_get_target(e) == statusDot)
+    statusDot = NULL;
+}
+
+static void onScrollListDeleted(lv_event_t *e) {
+  if (lv_event_get_target(e) == scrollList)
+    scrollList = NULL;
+}
+
+// --- Change detection: compare only what the views display ---
+
+static bool sameDaily(const DailyForecast &a, const DailyForecast &b) {
+  return a.date == b.date && a.maxTemp == b.maxTemp &&
+         a.minTemp == b.minTemp && a.weatherCode == b.weatherCode &&
+         a.pop == b.pop;
+}
+
+static bool sameHourly(const HourlyForecast &a, const HourlyForecast &b) {
+  return a.time == b.time && a.temp == b.temp &&
+         a.weatherCode == b.weatherCode && a.pop == b.pop &&
+         a.isNight == b.isNight;
+}
+
+// lastUpdate itself is ignored (only the dot shows it). Placeholders
+// (lastUpdate 0) never compare equal: their "Fetching..." / "Retrying"
+// text depends on the fetch status, and they are cheap to rebuild.
+static bool sameWeatherDisplay(const WeatherData &a, const WeatherData &b) {
+  if (a.lastUpdate == 0 || b.lastUpdate == 0)
+    return false;
+  if (a.cityName != b.cityName || a.currentTemp != b.currentTemp ||
+      a.currentWeatherCode != b.currentWeatherCode ||
+      a.currentHumidity != b.currentHumidity ||
+      a.currentPressure != b.currentPressure ||
+      a.currentFeelsLike != b.currentFeelsLike ||
+      a.currentAQI != b.currentAQI || a.windSpeed != b.windSpeed ||
+      a.windDirection != b.windDirection ||
+      a.currentRainProb != b.currentRainProb || a.isNight != b.isNight ||
+      a.sunrise != b.sunrise || a.sunset != b.sunset)
+    return false;
+  for (int i = 0; i < 7; i++)
+    if (!sameDaily(a.daily[i], b.daily[i]))
+      return false;
+  for (int i = 0; i < 24; i++)
+    if (!sameHourly(a.hourly[i], b.hourly[i]))
+      return false;
+  return true;
+}
+
+// Same rows (line + destination, in order) => the ETAs can be updated in
+// place. Only the rows BusView shows are compared.
+static bool sameBusLayout(const BusData &a, const BusData &b) {
+  if (a.stopName != b.stopName || a.stopCode != b.stopCode)
+    return false;
+  // Empty lists show a message; only "No buses right now" (real data, no
+  // arrivals) is stable. Placeholder messages depend on the fetch status.
+  if (a.arrivals.empty() || b.arrivals.empty())
+    return a.arrivals.empty() && b.arrivals.empty() && a.lastUpdate != 0 &&
+           b.lastUpdate != 0;
+  size_t rowsA = min(a.arrivals.size(), (size_t)BusView::MAX_ROWS);
+  size_t rowsB = min(b.arrivals.size(), (size_t)BusView::MAX_ROWS);
+  if (rowsA != rowsB)
+    return false;
+  for (size_t i = 0; i < rowsA; i++)
+    if (a.arrivals[i].line != b.arrivals[i].line ||
+        a.arrivals[i].destination != b.arrivals[i].destination)
+      return false;
+  return true;
+}
+
+static bool sameStocks(const std::vector<StockItem> &a,
+                       const std::vector<StockItem> &b) {
+  if (a.size() != b.size())
+    return false;
+  for (size_t i = 0; i < a.size(); i++)
+    if (a[i].symbol != b[i].symbol || a[i].price != b[i].price ||
+        a[i].changePercent != b[i].changePercent ||
+        a[i].currency != b[i].currency)
+      return false;
+  return true;
+}
 
 LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
@@ -130,6 +227,12 @@ void GuiController::applyPendingScreenChange() {
   // corrupts LVGL's internal screen/event state and causes LoadProhibited.
   if ((int32_t)(millis() - screenAnimUntil) < 0) // wrap-safe
     return;
+  // Data refreshes (anim 0) wait until the finger is off the screen, so a
+  // rebuild never deletes the object being pressed. User navigation (swipe,
+  // tap with an animation) applies immediately.
+  if (pendingScreenAnim == 0 &&
+      (touchDown || millis() - touchReleasedAt < TOUCH_SETTLE_MS))
+    return;
   PendingScreen toShow = pendingScreenChange;
   int anim = pendingScreenAnim;
   pendingScreenChange = SCREEN_NONE;
@@ -147,6 +250,132 @@ void GuiController::applyPendingScreenChange() {
     break;
   default:
     break;
+  }
+}
+
+// --- DATA APPLICATION (called from the main loop) ---
+
+void GuiController::applyWeatherData(const WeatherData &data) {
+  static bool shownOnce = false;
+  bool changed = !sameWeatherDisplay(cachedWeather, data);
+  cachedWeather = data;
+
+  if (!shownOnce) { // First data replaces the boot loading screen
+    shownOnce = true;
+    requestRefresh();
+    return;
+  }
+  if (currentApp != APP_WEATHER)
+    return;
+  if (changed)
+    requestRefresh();
+  else
+    refreshStatusDot(); // Same numbers, new timestamp: dot only
+}
+
+void GuiController::applyBusData(const BusData &data) {
+  bool sameLayout = sameBusLayout(cachedBus, data);
+  cachedBus = data;
+
+  if (currentApp != APP_BUS)
+    return;
+  // With a rebuild already queued the visible rows may belong to older data;
+  // the rebuild will show this data anyway.
+  if (sameLayout && pendingScreenChange == SCREEN_NONE) {
+    BusView::updateEtas(data); // Same rows: just new arrival times
+    refreshStatusDot();
+  } else {
+    requestRefresh();
+  }
+}
+
+void GuiController::applyStockData(const std::vector<StockItem> &data) {
+  bool changed = !sameStocks(cachedStock, data);
+  cachedStock = data;
+
+  if (currentApp != APP_STOCK)
+    return;
+  if (changed)
+    requestRefresh();
+  else
+    refreshStatusDot();
+}
+
+void GuiController::onStatusChanged() {
+  // Placeholder screens show "Fetching..." text that depends on the status,
+  // so those are rebuilt; normal screens only recolour the dot.
+  bool placeholder =
+      (currentApp == APP_WEATHER && cachedWeather.lastUpdate == 0) ||
+      (currentApp == APP_BUS && cachedBus.lastUpdate == 0 &&
+       cachedBus.arrivals.empty());
+  if (placeholder)
+    requestRefresh();
+  else
+    refreshStatusDot();
+}
+
+// --- STATUS DOT ---
+
+void GuiController::setStatusDot(lv_obj_t *dot) {
+  statusDot = dot;
+  lv_obj_add_event_cb(dot, onStatusDotDeleted, LV_EVENT_DELETE, NULL);
+}
+
+uint32_t GuiController::statusDotColor() {
+  bool updating;
+  uint32_t last;
+  uint32_t staleMs;
+  switch (currentApp) {
+  case APP_WEATHER:
+    updating = DataManager::isWeatherUpdating(getCityIndex());
+    last = cachedWeather.lastUpdate;
+    staleMs = WEATHER_STALE_MS;
+    break;
+  case APP_BUS:
+    updating = DataManager::isBusUpdating(getBusIndex());
+    last = cachedBus.lastUpdate;
+    staleMs = BUS_STALE_MS;
+    break;
+  default:
+    updating = DataManager::isStockUpdating();
+    last = DataManager::getStockLastUpdate();
+    staleMs = STOCK_STALE_MS;
+    break;
+  }
+  if (updating)
+    return 0xFFFF00; // Yellow: fetching
+  if (last == 0 || millis() - last > staleMs)
+    return 0xFF0000; // Red: no data / stale
+  return 0x00AA00;   // Green: fresh
+}
+
+void GuiController::refreshStatusDot() {
+  if (statusDot)
+    lv_obj_set_style_bg_color(statusDot, lv_color_hex(statusDotColor()), 0);
+}
+
+// --- TOUCH / SCROLL ---
+
+void GuiController::setTouchActive(bool down) {
+  if (touchDown && !down)
+    touchReleasedAt = millis();
+  touchDown = down;
+}
+
+void GuiController::trackListScroll(lv_obj_t *list, int key) {
+  // The previous screen (and its list) still exists while the new one is
+  // built, so its scroll offset can be carried over.
+  lv_coord_t y = 0;
+  if (scrollList && scrollKey == key)
+    y = lv_obj_get_scroll_y(scrollList);
+
+  scrollList = list;
+  scrollKey = key;
+  lv_obj_add_event_cb(list, onScrollListDeleted, LV_EVENT_DELETE, NULL);
+
+  if (y > 0) {
+    lv_obj_update_layout(list); // Children need sizes before scrolling
+    lv_obj_scroll_to_y(list, y, LV_ANIM_OFF);
   }
 }
 
@@ -346,6 +575,7 @@ void GuiController::setActiveTimeLabel(lv_obj_t *label) {
 
 void GuiController::updateTime() {
   BusView::tick(); // Live bus ETA countdown (no-op unless the bus screen is up)
+  refreshStatusDot(); // Turns red once data goes stale, without a rebuild
 
   if (activeTimeLabel == NULL)
     return;

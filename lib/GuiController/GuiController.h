@@ -37,9 +37,29 @@ public:
   static bool isBusScreenActive();
   static bool isStockScreenActive();
   static bool isWeatherScreenActive();
-  static void updateWeatherCache(const WeatherData &data);
-  static void updateBusCache(const BusData &data);
-  static void updateStockCache(const std::vector<StockItem> &data);
+
+  // Store fresh data and apply it to the visible screen with the least work:
+  // a full rebuild only when something displayed changed; otherwise just
+  // the status dot (and, for bus, the ETAs) are updated in place.
+  static void applyWeatherData(const WeatherData &data);
+  static void applyBusData(const BusData &data);
+  static void applyStockData(const std::vector<StockItem> &data);
+  // A fetch started/finished for the visible screen ("updating" dot)
+  static void onStatusChanged();
+
+  // Status dot of the visible screen, recoloured in place
+  static void setStatusDot(lv_obj_t *dot);
+  static uint32_t statusDotColor(); // For the current app's cached data
+  static void refreshStatusDot();
+
+  // Data refreshes wait while a finger is on the screen (set by the touch
+  // driver callback), so a rebuild never swallows a tap or swipe.
+  static void setTouchActive(bool down);
+
+  // Keeps a scrollable list's position across rebuilds of the same view.
+  // Call after the list's children exist. key identifies the view (e.g.
+  // city + forecast mode); a different key starts at the top.
+  static void trackListScroll(lv_obj_t *list, int key);
 
   enum AppMode { APP_WEATHER, APP_STOCK, APP_BUS };
   static AppMode currentApp;

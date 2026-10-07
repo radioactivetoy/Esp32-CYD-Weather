@@ -91,15 +91,10 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
   lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0); // Right 1px
   lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
 
-  uint32_t dotColor = 0x00AA00; // Dark Green
-  uint32_t lastUpdate = DataManager::getStockLastUpdate();
-  if (DataManager::isStockUpdating()) {
-    dotColor = 0xFFFF00; // Yellow
-  } else if (lastUpdate == 0 ||
-             (millis() - lastUpdate > 300000)) { // 5m Stale
-    dotColor = 0xFF0000;                         // Red
-  }
-  lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
+  // Green fresh / yellow updating / red stale; recoloured in place later
+  lv_obj_set_style_bg_color(dot, lv_color_hex(GuiController::statusDotColor()),
+                            0);
+  GuiController::setStatusDot(dot);
 
   // List
   lv_obj_t *list = lv_obj_create(new_scr);
@@ -184,6 +179,9 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
                                  0); // 14px
       lv_obj_set_style_text_align(change, LV_TEXT_ALIGN_RIGHT, 0);
     }
+
+    // Keep the scroll position when new quotes rebuild the list
+    GuiController::trackListScroll(list, 1);
   }
 
   lv_scr_load_anim_t anim_type = LV_SCR_LOAD_ANIM_NONE;

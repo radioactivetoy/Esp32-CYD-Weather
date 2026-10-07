@@ -233,14 +233,10 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_align_to(dot, time_lbl, LV_ALIGN_OUT_LEFT_MID, -7, 0);
   lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
 
-  uint32_t dotColor = 0x00AA00; // Dark Green (Fresh)
-  if (DataManager::isWeatherUpdating(GuiController::getCityIndex())) {
-    dotColor = 0xFFFF00; // Yellow (Refreshing)
-  } else if (data.lastUpdate == 0 ||
-             (millis() - data.lastUpdate > 900000)) {
-    dotColor = 0xFF0000; // Red (Stale)
-  }
-  lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
+  // Green fresh / yellow updating / red stale; recoloured in place later
+  lv_obj_set_style_bg_color(dot, lv_color_hex(GuiController::statusDotColor()),
+                            0);
+  GuiController::setStatusDot(dot);
 
   if (noData) {
     // === NO DATA YET === (keeps gestures working while we wait)
@@ -579,6 +575,10 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_label_set_text(temp_lbl, buf);
       lv_obj_set_style_text_color(temp_lbl, lv_color_hex(0xFFFFFF), 0);
     }
+
+    // Keep the scroll position when this same list is rebuilt with new data
+    GuiController::trackListScroll(
+        list, 100 + GuiController::getCityIndex() * 10 + forecastMode);
   }
 
   // Animation

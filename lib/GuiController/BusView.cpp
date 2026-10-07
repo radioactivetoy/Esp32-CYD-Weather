@@ -12,7 +12,7 @@ LV_FONT_DECLARE(lv_font_montserrat_20);
 // Arrival times are fetched every ~60s; in between, tick() counts the visible
 // labels down from the fetch time. The pointers belong to liveScreen and are
 // dropped when LVGL deletes that screen (auto_del after a screen change).
-static const int MAX_ROWS = 6;
+static const int MAX_ROWS = BusView::MAX_ROWS;
 static lv_obj_t *liveLabels[MAX_ROWS];
 static int liveSeconds[MAX_ROWS];
 static int liveCount = 0;
@@ -48,6 +48,17 @@ static void setEtaLabel(lv_obj_t *label, int seconds) {
   else if (mins <= 5)
     col = 0xFFFF00;
   lv_obj_set_style_text_color(label, lv_color_hex(col), 0);
+}
+
+void BusView::updateEtas(const BusData &data) {
+  if (!liveScreen)
+    return;
+  // Rows match data.arrivals in order (GuiController checked the layout)
+  int n = min(liveCount, (int)data.arrivals.size());
+  for (int i = 0; i < n; i++)
+    liveSeconds[i] = data.arrivals[i].seconds;
+  liveFetchedAt = data.lastUpdate;
+  tick();
 }
 
 void BusView::forgetLiveLabels() {
@@ -158,14 +169,10 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_align_to(dot, time_lb, LV_ALIGN_OUT_LEFT_MID, -7, 0);
   lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
 
-  uint32_t dotColor = 0x00AA00; // Dark Green
-  if (DataManager::isBusUpdating(GuiController::getBusIndex())) {
-    dotColor = 0xFFFF00; // Yellow
-  } else if (data.lastUpdate == 0 ||
-             (millis() - data.lastUpdate > 60000)) { // 60s Stale
-    dotColor = 0xFF0000; // Red
-  }
-  lv_obj_set_style_bg_color(dot, lv_color_hex(dotColor), 0);
+  // Green fresh / yellow updating / red stale; recoloured in place later
+  lv_obj_set_style_bg_color(dot, lv_color_hex(GuiController::statusDotColor()),
+                            0);
+  GuiController::setStatusDot(dot);
   Serial.println("BusView: Time & Dot Created");
 
   // List

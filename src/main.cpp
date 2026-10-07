@@ -21,6 +21,8 @@ void my_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
   } else {
     data->state = LV_INDEV_STATE_REL;
   }
+  // Data refreshes wait while the screen is touched
+  GuiController::setTouchActive(data->state == LV_INDEV_STATE_PR);
 }
 
 // Time-Based Backlight Helper (Could move to Ledger or DataManager, but fine
@@ -90,8 +92,6 @@ void setup() {
 }
 
 void loop() {
-  static bool weatherInitialized = false;
-
   // --- GUI UPDATE ---
   GuiController::update();
 
@@ -103,42 +103,21 @@ void loop() {
   static BusData bd;
   static std::vector<StockItem> sd;
 
-  // 1. Weather Update
-  if (DataManager::getWeatherData(wd)) {
-    GuiController::updateWeatherCache(wd);
-    if (!weatherInitialized || GuiController::isWeatherScreenActive()) {
-      GuiController::requestRefresh();
-    }
-    weatherInitialized = true;
-  }
+  // GuiController decides per update: full rebuild only when something
+  // displayed changed, otherwise in-place (status dot, bus ETAs).
+  if (DataManager::getWeatherData(wd))
+    GuiController::applyWeatherData(wd);
+  if (DataManager::getBusData(bd))
+    GuiController::applyBusData(bd);
+  if (DataManager::getStockData(sd))
+    GuiController::applyStockData(sd);
 
-  // 2. Bus Update
-  bool busUpdated = false;
-  if (DataManager::getBusData(bd)) {
-    GuiController::updateBusCache(bd);
-    if (GuiController::isBusScreenActive()) {
-      GuiController::requestRefresh();
-      busUpdated = true;
-    }
-  }
-
-  // 3. Stock Update
-  if (DataManager::getStockData(sd)) {
-    GuiController::updateStockCache(sd);
-    if (GuiController::isStockScreenActive()) {
-      GuiController::requestRefresh();
-    }
-  }
-
-  // 4. Status Change Updates (Repaint for Yellow Dot)
-  if (!busUpdated && DataManager::getBusStatusChanged() &&
-      GuiController::isBusScreenActive()) {
-    GuiController::requestRefresh();
-  }
+  // A fetch started/finished for the visible screen: yellow dot on/off
   if (DataManager::getWeatherStatusChanged() &&
-      GuiController::isWeatherScreenActive()) {
-    GuiController::requestRefresh();
-  }
+      GuiController::isWeatherScreenActive())
+    GuiController::onStatusChanged();
+  if (DataManager::getBusStatusChanged() && GuiController::isBusScreenActive())
+    GuiController::onStatusChanged();
 
   // --- APP STATE TRIGGERS ---
 
