@@ -130,6 +130,7 @@ lv_obj_t *WeatherView::createWeatherIcon(lv_obj_t *parent, int code,
 static lv_style_t styleRow;      // Border + background opacity
 static lv_style_t styleRowEven;  // Background colour, alternating
 static lv_style_t styleRowOdd;
+static lv_style_t styleIconBox;  // 40x40 holder for the zoomed icon
 static lv_style_t styleTimeCol;  // White, fixed width
 static lv_style_t styleRainCol;  // Blue, small, centred, fixed width
 static lv_style_t styleTrendCol; // Centred, fixed width
@@ -153,6 +154,10 @@ static void initListStyles() {
   lv_style_set_bg_color(&styleRowEven, lv_color_hex(0x101010));
   lv_style_init(&styleRowOdd);
   lv_style_set_bg_color(&styleRowOdd, lv_color_hex(0x202020));
+
+  lv_style_init(&styleIconBox);
+  lv_style_set_width(&styleIconBox, 40);
+  lv_style_set_height(&styleIconBox, 40);
 
   lv_style_init(&styleTimeCol);
   lv_style_set_width(&styleTimeCol, 60);
@@ -562,13 +567,17 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
         lv_label_set_text(time_lbl, dateBuf);
       }
 
-      // Icon: 64px image zoomed to 40px. SIZE_MODE_REAL makes the object
-      // itself 40x40, so no wrapper box is needed for the flex layout.
+      // Icon: 64px image centred in a 40x40 box and zoomed to fit. (Sizing
+      // the image object itself to 40x40 makes LVGL tile and offset it.)
+      lv_obj_t *icon_box = lv_obj_create(row);
+      lv_obj_remove_style_all(icon_box); // Transparent, no border/padding
+      lv_obj_add_style(icon_box, &styleIconBox, 0);
+      lv_obj_clear_flag(icon_box,
+                        LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
       lv_obj_t *icon = createWeatherIcon(
-          row,
+          icon_box,
           isHourly ? data.hourly[i].weatherCode : data.daily[i].weatherCode,
           isHourly && data.hourly[i].isNight); // Daily: day icon
-      lv_img_set_size_mode(icon, LV_IMG_SIZE_MODE_REAL);
       lv_img_set_zoom(icon, 160);
 
       // Rain Prob (List)
