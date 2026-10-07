@@ -2,16 +2,18 @@
 
 #include <lvgl.h>
 
-// App-wide look: dark navy background, hairline dividers instead of boxes,
+// App-wide look: black background, hairline dividers instead of boxes,
 // dim small labels with bright values, colour only where it means something.
 namespace Theme {
 
 // --- Colours ---
-constexpr uint32_t BG = 0x05101C;        // Screen background
+// Pure black and neutral greys: on this TN panel dark tinted colours (e.g.
+// navy) show up as bright blue, especially viewed from below.
+constexpr uint32_t BG = 0x000000;        // Screen background
 constexpr uint32_t TEXT = 0xFFFFFF;      // Values, titles
 constexpr uint32_t TEXT_SOFT = 0xDDDDDD; // Header clock
-constexpr uint32_t TEXT_DIM = 0x8A96A3;  // Labels, secondary info
-constexpr uint32_t DIVIDER = 0x1C2A38;   // Hairlines, empty bar tracks
+constexpr uint32_t TEXT_DIM = 0x8C8C8C;  // Labels, secondary info
+constexpr uint32_t DIVIDER = 0x333333;   // Hairlines, empty bar tracks
 constexpr uint32_t RAIN = 0x44BBFF;      // Precipitation
 constexpr uint32_t GOOD = 0x55DD55;      // Positive change, low UV, ...
 constexpr uint32_t BAD = 0xFF6666;       // Negative change

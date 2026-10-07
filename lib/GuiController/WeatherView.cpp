@@ -282,19 +282,23 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else if (forecastMode == 0) {
     // === CURRENT WEATHER: hero (icon + big temperature) over a details grid
 
-    // Hero icon at native 64px
+    // Hero icon
     lv_obj_t *icon_wrap = lv_obj_create(bg_grad);
     lv_obj_remove_style_all(icon_wrap);
-    lv_obj_set_size(icon_wrap, 72, 72);
-    lv_obj_set_pos(icon_wrap, 14, 50);
+    lv_obj_set_size(icon_wrap, 84, 84);
+    lv_obj_set_pos(icon_wrap, 8, 42);
     lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
+    // Meteocons fill only ~45 of their 64px; scale 1.25x so the icon holds
+    // its own next to the big digits
+    lv_obj_t *hero_icon =
+        createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
+    lv_img_set_zoom(hero_icon, 320);
 
     // Big temperature in whole degrees (the decimal is false precision)
     snprintf(buf, sizeof(buf), "%d\xC2\xB0", (int)lroundf(data.currentTemp));
     lv_obj_t *temp_lbl = Theme::label(bg_grad, buf, &Theme::digits,
                                       Theme::tempColor(data.currentTemp));
-    lv_obj_set_pos(temp_lbl, 100, 40);
+    lv_obj_set_pos(temp_lbl, 100, 38);
 
     // Tomorrow warmer / cooler (by >= 1 degree); nothing when about the same
     float diff = data.daily[1].maxTemp - data.daily[0].maxTemp;
