@@ -70,61 +70,44 @@ const char *WeatherView::getWeatherDesc(int code) {
 
 lv_obj_t *WeatherView::createWeatherIcon(lv_obj_t *parent, int code,
                                          bool isNight) {
-  const void *src = &weather_icon_cloud;
-  lv_color_t color = lv_color_hex(0xFFFFFF);
-
+  // Full-colour Meteocons (alpha images), so no recolouring. Drizzle and
+  // showers have no night variant.
+  const void *src = &weather_icon_cloud; // Unknown codes (-1)
   if (code == 0) {
-    if (isNight) {
-      src = &weather_icon_moon;
-      color = lv_color_hex(0xEEEEEE); // Moon color
-    } else {
-      src = &weather_icon_sun;
-      color = lv_color_hex(0xFFD700);
-    }
+    src = isNight ? (const void *)&weather_icon_moon
+                  : (const void *)&weather_icon_sun;
   } else if (code == 1 || code == 2) {
-    if (isNight) {
-      src = &weather_icon_night_part_cloud;
-      color = lv_color_hex(0xDDDDDD); // Night cloud
-    } else {
-      src = &weather_icon_part_cloud;
-      color = lv_color_hex(0xFFEEAA);
-    }
+    src = isNight ? (const void *)&weather_icon_night_part_cloud
+                  : (const void *)&weather_icon_part_cloud;
   } else if (code == 3) {
-    src = &weather_icon_cloud;
-    color = lv_color_hex(0xEEEEEE);
+    src = isNight ? (const void *)&weather_icon_cloud_night
+                  : (const void *)&weather_icon_cloud;
   } else if (code == 45 || code == 48) {
-    src = &weather_icon_fog;
-    color = lv_color_hex(0xAAAAAA);
+    src = isNight ? (const void *)&weather_icon_fog_night
+                  : (const void *)&weather_icon_fog;
   } else if (code >= 51 && code <= 55) {
     src = &weather_icon_drizzle;
-    color = lv_color_hex(0xADD8E6);
   } else if (code >= 61 && code <= 67) {
-    src = &weather_icon_rain;
-    color = lv_color_hex(0x00BFFF);
-  } else if (code >= 71 && code <= 77) {
-    src = &weather_icon_snow;
-    color = lv_color_hex(0xE0FFFF);
+    src = isNight ? (const void *)&weather_icon_rain_night
+                  : (const void *)&weather_icon_rain;
+  } else if ((code >= 71 && code <= 77) || code == 85 || code == 86) {
+    src = isNight ? (const void *)&weather_icon_snow_night
+                  : (const void *)&weather_icon_snow;
   } else if (code >= 80 && code <= 82) {
     src = &weather_icon_showers;
-    color = lv_color_hex(0x1E90FF);
-  } else if (code >= 85 && code <= 86) {
-    src = &weather_icon_snow;
-    color = lv_color_hex(0xE0FFFF);
   } else if (code >= 95) {
-    src = &weather_icon_thunder;
-    color = lv_color_hex(0x9370DB);
+    src = isNight ? (const void *)&weather_icon_thunder_night
+                  : (const void *)&weather_icon_thunder;
   }
 
   lv_obj_t *img = lv_img_create(parent);
   lv_img_set_src(img, src);
   lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_img_recolor_opa(img, LV_OPA_COVER, 0);
-  lv_obj_set_style_img_recolor(img, color, 0);
   return img;
 }
 
 // --- Shared styles for the hourly / daily list rows ---
-// The hourly list has 24 rows of 5-6 objects. Setting each property on each
+// The hourly list has 12 rows of 5-6 objects. Setting each property on each
 // object allocates a private style per object (about 1.5KB per row in
 // practice); these styles are created once and only referenced by the rows.
 static lv_style_t styleRow;      // Border + background opacity
@@ -226,7 +209,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   // Click & Gesture Handlers
   lv_obj_add_flag(bg_grad, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_GESTURE_BUBBLE);
   lv_obj_add_event_cb(bg_grad, GuiController::handleScreenClick,
-                      LV_EVENT_CLICKED, NULL);
+                      LV_EVENT_SHORT_CLICKED, NULL); // Not after a long press
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
                       NULL);
 
@@ -247,8 +230,8 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_set_style_border_width(header_row, 0, 0);
   lv_obj_set_style_pad_all(header_row, 5, 0);
   lv_obj_clear_flag(header_row, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(header_row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE |
-                                  LV_OBJ_FLAG_GESTURE_BUBBLE);
+  // Long press: body = refresh now, header = device info
+  GuiController::attachLongPress(bg_grad, header_row);
 
   lv_obj_t *city_lbl = lv_label_create(header_row);
   lv_obj_set_width(city_lbl, 160); // Reduced to 160 as per user request
@@ -342,7 +325,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
     if (lv_obj_get_child(icon_wrap, 0))
       lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0),
-                      220); // Zoom 256->220 (approx 0.85x)
+                      200); // 64px icon -> 50px, fits the 50x50 box
 
     // Temp Row
     lv_obj_t *temp_row = lv_obj_create(glass_card);

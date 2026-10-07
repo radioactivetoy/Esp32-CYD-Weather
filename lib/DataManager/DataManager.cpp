@@ -66,6 +66,8 @@ std::atomic<bool> DataManager::weatherStatusChanged{false};
 std::atomic<bool> DataManager::busStatusChanged{false};
 
 std::atomic<bool> DataManager::manualBusTrigger{false};
+std::atomic<bool> DataManager::manualWeatherTrigger{false};
+std::atomic<bool> DataManager::manualStockTrigger{false};
 
 std::vector<CityWeatherCache> DataManager::cityCaches;
 std::vector<BusStopCache> DataManager::busCaches;
@@ -134,6 +136,8 @@ bool DataManager::getStockData(std::vector<StockItem> &out) {
 }
 
 void DataManager::triggerBusUpdate() { manualBusTrigger = true; }
+void DataManager::triggerWeatherUpdate() { manualWeatherTrigger = true; }
+void DataManager::triggerStockUpdate() { manualStockTrigger = true; }
 
 // --- BACKGROUND TASK (The "Brain") ---
 void DataManager::networkTask(void *parameter) {
@@ -296,6 +300,7 @@ void DataManager::networkTask(void *parameter) {
 
   uint32_t lastStockUpdate = 0;
   bool stocksFetchedOnce = false;
+  bool stocksForced = false; // Long press on the stock screen
 
   auto fetchStocks = [&]() {
     Serial.println("NETWORK: Updating Stocks...");
@@ -313,6 +318,7 @@ void DataManager::networkTask(void *parameter) {
 
     lastStockUpdate = millis();
     stocksFetchedOnce = true;
+    stocksForced = false;
   };
 
   // --- SCHEDULING ---
@@ -372,6 +378,13 @@ void DataManager::networkTask(void *parameter) {
       if (!c.hasData || now - c.lastUpdate > WEATHER_SWITCH_STALE_MS)
         priorityCity = targetCity;
     }
+    // Long press on the weather screen: refresh the visible city now
+    if (manualWeatherTrigger.exchange(false) && targetCity >= 0 &&
+        targetCity < (int)cityCaches.size())
+      priorityCity = targetCity;
+    // Long press on the stock screen
+    if (manualStockTrigger.exchange(false))
+      stocksForced = true;
 
     int targetBus = GuiController::getBusIndex();
     bool busValid = targetBus >= 0 && targetBus < (int)busCaches.size();
@@ -406,7 +419,7 @@ void DataManager::networkTask(void *parameter) {
       } else if ((idx = dueBus(now)) >= 0) {
         fetchBus(idx);
       } else if (stockSymbols.length() > 0 &&
-                 (!stocksFetchedOnce ||
+                 (stocksForced || !stocksFetchedOnce ||
                   now - lastStockUpdate > STOCK_REFRESH_MS)) {
         fetchStocks();
       } else {

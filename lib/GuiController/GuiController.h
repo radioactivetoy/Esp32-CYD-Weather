@@ -83,7 +83,11 @@ public:
 
   // Public Callbacks for Views
   static void handleGesture(lv_event_t *e);
-  static void handleScreenClick(lv_event_t *e);
+  static void handleScreenClick(lv_event_t *e); // LV_EVENT_SHORT_CLICKED
+
+  // Long-press actions for a view: anywhere on `body` = refresh now;
+  // on `header` = device info overlay (tap to close).
+  static void attachLongPress(lv_obj_t *body, lv_obj_t *header);
   static void handleSwipe(int16_t dx, int16_t dy);
   static uint32_t getLastGestureTime();
 

@@ -2,6 +2,7 @@
 #include "BusService.h"
 #include "DataManager.h"
 #include "NetworkManager.h"
+#include "SystemMonitor.h"
 #include "WeatherService.h"
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -319,6 +320,7 @@ void GuiController::onStatusChanged() {
 
 void GuiController::setStatusDot(lv_obj_t *dot) {
   statusDot = dot;
+  lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE); // Touches go to the header
   lv_obj_add_event_cb(dot, onStatusDotDeleted, LV_EVENT_DELETE, NULL);
 }
 
@@ -710,4 +712,84 @@ void GuiController::handleScreenClick(lv_event_t *e) {
       busStationChanged = true;
     }
   }
+}
+
+// --- LONG PRESS: manual refresh (body) and device info (header) ---
+
+static void onBodyLongPress(lv_event_t *e) {
+  switch (GuiController::currentApp.load()) {
+  case GuiController::APP_WEATHER:
+    DataManager::triggerWeatherUpdate();
+    break;
+  case GuiController::APP_BUS:
+    DataManager::triggerBusUpdate();
+    break;
+  case GuiController::APP_STOCK:
+    DataManager::triggerStockUpdate();
+    break;
+  }
+  Serial.println("GUI: Long press -> manual refresh");
+}
+
+static void onInfoOverlayClicked(lv_event_t *e) {
+  lv_obj_del_async(lv_event_get_target(e));
+}
+
+static void onHeaderLongPress(lv_event_t *e) {
+  lv_event_stop_bubbling(e); // Not also a manual refresh
+
+  SystemMonitor::Stats st = SystemMonitor::read();
+
+  // On the active screen, so a screen rebuild also removes it
+  lv_obj_t *overlay = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(overlay, 214, LV_SIZE_CONTENT);
+  lv_obj_align(overlay, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_set_style_bg_color(overlay, lv_color_hex(0x111122), 0);
+  lv_obj_set_style_bg_opa(overlay, LV_OPA_90, 0);
+  lv_obj_set_style_radius(overlay, 12, 0);
+  lv_obj_set_style_border_color(overlay, lv_color_hex(0xAAAAAA), 0);
+  lv_obj_set_style_border_width(overlay, 1, 0);
+  lv_obj_set_style_pad_all(overlay, 10, 0);
+  lv_obj_set_style_pad_row(overlay, 4, 0);
+  lv_obj_set_flex_flow(overlay, LV_FLEX_FLOW_COLUMN);
+  lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE); // Swallows the closing tap
+  lv_obj_add_event_cb(overlay, onInfoOverlayClicked, LV_EVENT_CLICKED, NULL);
+
+  auto addLine = [overlay](const char *text, uint32_t color) {
+    lv_obj_t *lbl = lv_label_create(overlay);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_font(lbl, &Fonts::text14, 0); // SSID may have accents
+    lv_obj_set_style_text_color(lbl, lv_color_hex(color), 0);
+  };
+
+  char buf[64];
+  addLine("Device Info", 0xFFD700);
+  String ssid = GuiController::sanitize(WiFi.SSID());
+  snprintf(buf, sizeof(buf), "WiFi: %s (%d dBm)",
+           ssid.length() ? ssid.c_str() : "---", st.rssi);
+  addLine(buf, 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "IP: %s", WiFi.localIP().toString().c_str());
+  addLine(buf, 0xCCCCCC);
+  addLine("    weatherclock.local", 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "Up: %s", SystemMonitor::formatUptime(st.uptimeS).c_str());
+  addLine(buf, 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "Heap: %u KB (min %u KB)", st.heapFree / 1024,
+           st.heapMinFree / 1024);
+  addLine(buf, 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "Stack: loop %d, net %d", st.loopStackFree,
+           st.netStackFree);
+  addLine(buf, 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "Build: %s", __DATE__);
+  addLine(buf, 0xCCCCCC);
+  addLine("Tap to close", 0x777777);
+}
+
+void GuiController::attachLongPress(lv_obj_t *body, lv_obj_t *header) {
+  lv_obj_add_event_cb(body, onBodyLongPress, LV_EVENT_LONG_PRESSED, NULL);
+  // The header must be clickable to receive presses; taps and swipes on it
+  // still bubble to the screen.
+  lv_obj_add_flag(header, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE |
+                              LV_OBJ_FLAG_GESTURE_BUBBLE);
+  lv_obj_add_event_cb(header, onHeaderLongPress, LV_EVENT_LONG_PRESSED, NULL);
 }

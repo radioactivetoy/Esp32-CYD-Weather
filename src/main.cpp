@@ -118,6 +118,14 @@ void loop() {
     GuiController::onStatusChanged();
   if (DataManager::getBusStatusChanged() && GuiController::isBusScreenActive())
     GuiController::onStatusChanged();
+  // Stocks have no status signal; watch the flag (yellow dot while fetching)
+  static bool wasStockUpdating = false;
+  bool stockUpdating = DataManager::isStockUpdating();
+  if (stockUpdating != wasStockUpdating) {
+    wasStockUpdating = stockUpdating;
+    if (GuiController::isStockScreenActive())
+      GuiController::refreshStatusDot();
+  }
 
   // --- APP STATE TRIGGERS ---
 

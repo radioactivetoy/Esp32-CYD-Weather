@@ -113,7 +113,7 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
                       NULL);
   lv_obj_add_event_cb(new_scr, GuiController::handleScreenClick,
-                      LV_EVENT_CLICKED, NULL);
+                      LV_EVENT_SHORT_CLICKED, NULL); // Not after a long press
 
   lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
@@ -126,7 +126,8 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 5, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(header, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
+  // Long press: body = refresh now, header = device info
+  GuiController::attachLongPress(new_scr, header);
 
   lv_obj_t *title = lv_label_create(header);
   if (data.stopName.length() > 0) {

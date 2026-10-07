@@ -51,6 +51,8 @@ public:
 
   // Trigger updates manually (e.g. from UI)
   static void triggerBusUpdate();
+  static void triggerWeatherUpdate(); // Visible city, ignores backoff
+  static void triggerStockUpdate();
 
   // Status
   static bool isWeatherUpdating(int cityIndex);
@@ -85,6 +87,8 @@ private:
   static std::atomic<bool> busStatusChanged;
 
   static std::atomic<bool> manualBusTrigger;
+  static std::atomic<bool> manualWeatherTrigger;
+  static std::atomic<bool> manualStockTrigger;
 
   // Caches
   static std::vector<CityWeatherCache> cityCaches;
