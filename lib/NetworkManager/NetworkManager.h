@@ -61,6 +61,7 @@ private:
   static bool shouldSaveConfig;
   static void (*statusCallback)(const char *msg);
   static bool checkAuth();
+  static void setupOTA();
   static void saveConfigCallback();
   static void configModeCallback(WiFiManager *myWiFiManager);
 

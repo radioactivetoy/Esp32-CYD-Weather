@@ -147,7 +147,10 @@ void DataManager::networkTask(void *parameter) {
   esp_task_wdt_init(NET_WDT_TIMEOUT_S, true);
   esp_task_wdt_add(NULL);
 
-  GuiController::showLoadingScreen("Fetching Weather...");
+  // Show the IP briefly: it's needed for the settings page and OTA uploads
+  String fetchMsg = "Fetching weather...\n\nhttp://" +
+                    WiFi.localIP().toString() + "\nweatherclock.local";
+  GuiController::showLoadingScreen(fetchMsg.c_str());
 
   // --- INITIAL SETUP --- (config only changes via the web UI, which reboots)
   std::vector<String> cities = NetworkManager::getCities();

@@ -7,7 +7,6 @@
 LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
-LV_FONT_DECLARE(lv_font_montserrat_24);
 
 // Price with the quote's currency: "$187.20", "€24.31", "1234.00 CHF".
 static void formatPrice(char *buf, size_t len, float price,

@@ -1,6 +1,11 @@
 #include "NetworkManager.h"
 #include "NetUtils.h"
+#include <ArduinoOTA.h>
 #include <WiFiManager.h>
+#include <esp_task_wdt.h>
+
+// mDNS name for OTA uploads and the settings page: http://weatherclock.local
+static const char *OTA_HOSTNAME = "weatherclock";
 
 Preferences NetworkManager::prefs;
 bool NetworkManager::shouldSaveConfig = false;
@@ -44,7 +49,67 @@ std::vector<String> NetworkManager::getCities() {
 
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
 
-void NetworkManager::handleClient() { server.handleClient(); }
+void NetworkManager::handleClient() {
+  server.handleClient();
+  ArduinoOTA.handle(); // Blocks for the whole transfer while an upload runs
+}
+
+// Over-the-air firmware updates (PlatformIO / Arduino IDE "espota").
+// Protected by the settings password when one is set.
+void NetworkManager::setupOTA() {
+  static bool otaStarted = false;
+  static int lastShownPct = -1;
+
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  if (webPassword.length() > 0)
+    ArduinoOTA.setPassword(webPassword.c_str());
+
+  ArduinoOTA.onStart([]() {
+    otaStarted = true;
+    lastShownPct = -1;
+    Serial.println("OTA: Update started");
+    if (statusCallback)
+      statusCallback("Updating firmware...\n\nDo not unplug");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int done, unsigned int total) {
+    // The transfer blocks the network task: keep its watchdog fed
+    esp_task_wdt_reset();
+    int pct = total ? (int)((uint64_t)done * 100 / total) : 0;
+    if (pct / 5 != lastShownPct / 5) { // Redraw every 5%
+      lastShownPct = pct;
+      char buf[64];
+      snprintf(buf, sizeof(buf), "Updating firmware...\n\n%d%%\n\nDo not unplug",
+               pct);
+      if (statusCallback)
+        statusCallback(buf);
+    }
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("OTA: Update complete, rebooting");
+    if (statusCallback)
+      statusCallback("Update complete\n\nRestarting...");
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("OTA: Error %u\n", error);
+    // Errors before onStart (e.g. a wrong password) leave the app untouched.
+    // Once a transfer started, the loading screen replaced the app screen,
+    // so restart cleanly (the running firmware is still intact).
+    if (otaStarted) {
+      if (statusCallback)
+        statusCallback("Update failed\n\nRestarting...");
+      delay(3000);
+      ESP.restart();
+    }
+  });
+
+  ArduinoOTA.begin(); // Also starts mDNS as weatherclock.local
+  Serial.printf("NETWORK: OTA ready at %s.local (%s)%s\n", OTA_HOSTNAME,
+                WiFi.localIP().toString().c_str(),
+                webPassword.length() > 0 ? ", password protected" : "");
+}
 
 // Returns true when the request may proceed. With no password set the page
 // stays open (as before); otherwise HTTP basic auth with user "admin".
@@ -389,6 +454,8 @@ void NetworkManager::begin() {
       []() { server.send(404, "text/plain", "Not Found"); }); // Catch-all
   server.begin();
   Serial.println("NETWORK: Web Server Started.");
+
+  setupOTA();
 
   Serial.println("NETWORK: Setup Complete.");
 }

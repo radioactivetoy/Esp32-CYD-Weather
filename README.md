@@ -52,6 +52,19 @@ The interface relies on intuitive **Touch Gestures**:
     -   Run the command: `pio run --target upload`.
     -   Monitor output: `pio device monitor`.
 
+### Updating over WiFi (OTA)
+
+After the first USB flash, updates can go over WiFi:
+
+```
+pio run -e ota -t upload
+```
+
+-   The device announces itself as `weatherclock.local`. If your PC can't resolve it, use the IP (shown on screen at boot and on the settings page): `pio run -t upload --upload-port 192.168.x.x`.
+-   If you set a Settings Password in the web UI, it is also the OTA password: uncomment `upload_flags = --auth=...` in the `[env:ota]` section of `platformio.ini`.
+-   The screen shows the progress; the device restarts when done.
+-   OTA needs two app slots, so the project uses the `min_spiffs.csv` partition table (2 × 1.9 MB). Coming from an older build that used `huge_app.csv`, do **one USB flash** first; WiFi and settings are kept.
+
 ## Configuration (Web UI)
 
 No need to edit code! Configure everything via the web interface.
