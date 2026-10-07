@@ -157,7 +157,9 @@ void NetworkManager::handleRoot() {
   html += "OWM API Key (Optional, enables AQI and OWM forecasts):<br><input "
           "type='password' name='owmApiKey' value='" +
           htmlEscape(owmApiKey) + "'><br>";
-  html += "Settings Password (Optional, user 'admin'; leave blank to keep):"
+  html += String("Settings &amp; OTA Password (") +
+          (webPassword.length() > 0 ? "currently SET" : "currently NOT set") +
+          "; user 'admin'; leave blank to keep):"
           "<br><input type='password' name='webPassword' value=''><br>";
   if (webPassword.length() > 0)
     html += "<label><input type='checkbox' name='clearWebPassword' "
@@ -409,10 +411,17 @@ void NetworkManager::begin() {
   WiFiManagerParameter custom_appKey("appKey", "TMB App Key", appKey.c_str(),
                                      64);
 
+  // Lets the password be set during first setup, before the device is
+  // reachable on the home network. Blank keeps the current one.
+  WiFiManagerParameter custom_webPassword(
+      "webPassword", "Settings &amp; OTA Password (optional, user 'admin')", "",
+      64, "type='password'");
+
   wm.addParameter(&custom_city);
   wm.addParameter(&custom_busStop);
   wm.addParameter(&custom_appId);
   wm.addParameter(&custom_appKey);
+  wm.addParameter(&custom_webPassword);
 
   // Set timeout
   wm.setConfigPortalTimeout(180);
@@ -441,9 +450,13 @@ void NetworkManager::begin() {
     prefs.putString("busStop", busStop);
     prefs.putString("app_id", appId);
     prefs.putString("app_key", appKey);
-    // Note: Improvements not in WiFiManager yet for simplicity, default to NVS
-    // load If you want them in CP, add WiFiManagerParameters. But WebUI is
-    // better for advanced stuff.
+
+    String newPassword = custom_webPassword.getValue();
+    if (newPassword.length() > 0) {
+      webPassword = newPassword;
+      prefs.putString("webPassword", webPassword);
+    }
+    // Other settings live in the web UI (http://weatherclock.local)
   }
   prefs.end();
 

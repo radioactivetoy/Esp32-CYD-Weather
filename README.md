@@ -61,7 +61,9 @@ pio run -e ota -t upload
 ```
 
 -   The device announces itself as `weatherclock.local`. If your PC can't resolve it, use the IP (shown on screen at boot and on the settings page): `pio run -t upload --upload-port 192.168.x.x`.
--   If you set a Settings Password in the web UI, it is also the OTA password: uncomment `upload_flags = --auth=...` in the `[env:ota]` section of `platformio.ini`.
+-   **Password**: the Settings & OTA Password (set in the WiFi setup portal or the web UI) protects both the settings page (user `admin`) and OTA. Without one, anyone on your network can change settings or flash firmware. For uploads, pass it through an environment variable so it never ends up in git:
+    -   PowerShell: `$env:WEATHER_OTA_PASSWORD = "your-password"`
+    -   bash: `export WEATHER_OTA_PASSWORD=your-password`
 -   The screen shows the progress; the device restarts when done.
 -   OTA needs two app slots, so the project uses the `min_spiffs.csv` partition table (2 × 1.9 MB). Coming from an older build that used `huge_app.csv`, do **one USB flash** first; WiFi and settings are kept.
 
@@ -85,7 +87,7 @@ No need to edit code! Configure everything via the web interface.
     -   **Timezone**: Select your local time.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
     -   **API Keys**: Enter your TMB App ID/Key and (optionally) OpenWeatherMap API Key. Without an OWM key, weather comes from Open-Meteo and AQI is not shown.
-    -   **Settings Password** (optional): Protects this page with HTTP basic auth (user `admin`).
+    -   **Settings & OTA Password** (optional, recommended): Protects this page (HTTP basic auth, user `admin`) and OTA updates. Can also be set in the first-time WiFi setup portal.
 
 ## Controls
 -   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).
