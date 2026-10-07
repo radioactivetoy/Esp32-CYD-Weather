@@ -13,6 +13,10 @@ public:
 
   static void handleClient(); // New: Handle web requests
 
+  // Receives user-facing status messages (e.g. WiFi setup instructions).
+  // A callback keeps this module independent of the GUI.
+  static void setStatusCallback(void (*cb)(const char *msg));
+
   static String getCity();
   static String getBusStop();
   static String getAppId();
@@ -55,6 +59,7 @@ private:
   static String ledBrightness;
   static String webPassword; // Optional HTTP basic auth for the settings page
   static bool shouldSaveConfig;
+  static void (*statusCallback)(const char *msg);
   static bool checkAuth();
   static void saveConfigCallback();
   static void configModeCallback(WiFiManager *myWiFiManager);

@@ -18,7 +18,8 @@ struct HourlyForecast {
   String time; // "YYYY-MM-DD HH:MM" (local to the city); empty = no data
   float temp = 0;
   int weatherCode = -1;
-  float pop = 0; // Probability of Precipitation (0..1)
+  float pop = 0;        // Probability of Precipitation (0..1)
+  bool isNight = false; // For moon / night-cloud icons
 };
 
 struct WeatherData {

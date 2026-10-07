@@ -216,7 +216,7 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
       "pressure_msl,weather_code,wind_speed_10m,wind_direction_10m,is_day"
       "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
       "precipitation_probability_max"
-      "&hourly=temperature_2m,weather_code,precipitation_probability"
+      "&hourly=temperature_2m,weather_code,precipitation_probability,is_day"
       "&timezone=auto&past_days=1";
 
   Serial.println("Fetching Open-Meteo: " + url);
@@ -282,6 +282,7 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
         data.hourly[i].weatherCode = doc["hourly"]["weather_code"][idx] | -1;
         data.hourly[i].pop =
             (doc["hourly"]["precipitation_probability"][idx] | 0) / 100.0f;
+        data.hourly[i].isNight = (doc["hourly"]["is_day"][idx] | 1) == 0;
       }
       data.currentRainProb = data.hourly[0].pop;
     } else {
@@ -345,8 +346,9 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
         data.hourly[i].time = buf;
         data.hourly[i].temp = item["main"]["temp"];
         data.hourly[i].pop = item["pop"];
-        data.hourly[i].weatherCode =
-            owmIconToWmo(item["weather"][0]["icon"] | "");
+        const char *icon = item["weather"][0]["icon"] | "";
+        data.hourly[i].weatherCode = owmIconToWmo(icon);
+        data.hourly[i].isNight = isNightIcon(icon);
       }
       data.currentRainProb = data.hourly[0].pop;
 

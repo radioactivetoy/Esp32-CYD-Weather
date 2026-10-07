@@ -8,8 +8,7 @@
 struct BusArrival {
   String line;
   String destination;
-  String text; // e.g. "5 min"
-  int seconds; // Time in seconds
+  int seconds = 0; // Seconds until arrival at fetch time
 };
 
 struct BusData {

@@ -9,6 +9,31 @@ LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(lv_font_montserrat_24);
 
+// Price with the quote's currency: "$187.20", "€24.31", "1234.00 CHF".
+static void formatPrice(char *buf, size_t len, float price,
+                        const String &currency) {
+  const char *symbol = nullptr;
+  if (currency == "USD")
+    symbol = "$";
+  else if (currency == "EUR")
+    symbol = "\xE2\x82\xAC"; // €
+  else if (currency == "GBP")
+    symbol = "\xC2\xA3"; // £
+  else if (currency == "JPY" || currency == "CNY")
+    symbol = "\xC2\xA5"; // ¥
+
+  const char *fmt = (price < 1.0f) ? "%.4f" : "%.2f";
+  char num[24];
+  snprintf(num, sizeof(num), fmt, price);
+
+  if (symbol)
+    snprintf(buf, len, "%s%s", symbol, num);
+  else if (currency.length() > 0) // e.g. "GBp" (pence), "CHF"
+    snprintf(buf, len, "%s %s", num, currency.c_str());
+  else
+    snprintf(buf, len, "%s", num);
+}
+
 void StockView::show(const std::vector<StockItem> &data, int anim) {
   GuiController::currentApp = GuiController::APP_STOCK;
 
@@ -139,14 +164,10 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       // Price - Size 20
       lv_obj_t *price = lv_label_create(right_box);
       char buf[32];
-      if (item.price < 1.0)
-        snprintf(buf, sizeof(buf), "$%.4f", item.price);
-      else
-        snprintf(buf, sizeof(buf), "$%.2f", item.price);
+      formatPrice(buf, sizeof(buf), item.price, item.currency);
       lv_label_set_text(price, buf);
       lv_obj_set_style_text_color(price, lv_color_hex(0xFFFFFF), 0);
-      lv_obj_set_style_text_font(price, &lv_font_montserrat_20,
-                                 0); // 20px
+      lv_obj_set_style_text_font(price, &Fonts::text20, 0); // Has € £ ¥
       lv_obj_set_style_text_align(price, LV_TEXT_ALIGN_RIGHT, 0);
 
       // Change % - Size 16

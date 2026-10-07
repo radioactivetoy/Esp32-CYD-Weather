@@ -6,6 +6,7 @@
 
 struct StockItem {
   String symbol;
+  String currency; // ISO code from Yahoo, e.g. "USD", "EUR"
   float price = 0;
   float changePercent = 0;
   bool isValid = false;

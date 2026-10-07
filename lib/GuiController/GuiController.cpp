@@ -73,12 +73,13 @@ static lv_obj_t *activeTimeLabel = NULL;
 static int forecastMode = 0; // 0: Current, 1: Hourly, 2: Daily, 3: Chart
 static uint32_t lastGestureTime = 0; // Used to suppress tap after swipe
 
-// Custom Font
-LV_FONT_DECLARE(font_intl_16);
+LV_FONT_DECLARE(lv_font_montserrat_16);
+LV_FONT_DECLARE(lv_font_montserrat_20);
 
 void GuiController::init() {
   guiMutex = xSemaphoreCreateMutex();
   lv_init();
+  Fonts::init();
   tft.begin();
   tft.setRotation(0);
   lv_disp_draw_buf_init(&draw_buf, buf, NULL, screenWidth * drawBufLines);
@@ -173,69 +174,123 @@ void GuiController::requestRefresh() {
 
 void GuiController::drawLoadingScreen(const char *msg) {
   lv_obj_t *scr = lv_scr_act();
+  BusView::forgetLiveLabels(); // Their labels are deleted by the clean below
   lv_obj_clean(scr);
   activeTimeLabel = NULL;
 
-  lv_obj_set_style_bg_color(scr, lv_color_hex(0x0000AA), 0);
+  // Same black theme as the app screens
+  lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
+  lv_obj_t *title = lv_label_create(scr);
+  lv_label_set_text(title, "Weather Clock");
+  lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
 
   lv_obj_t *label = lv_label_create(scr);
   lv_label_set_text(label, msg ? msg : "Loading...");
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-  lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
-  // Note: Fonts are declared in Views now, but we can assume default or
-  // montserrat if available globally. Ideally Views handle all drawing. But for
-  // loading screen, default font is fine or reuse montserrat if declared here.
-  // For safety, let's use default font or declare one locally if needed.
-  // Actually, let's just use default LVGL font for Loading to avoid
-  // dependency/declaration mess or rely on what's available.
+  lv_obj_set_width(label, screenWidth - 20);
+  lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(0xDDDDDD), 0);
+  lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+  lv_obj_align(label, LV_ALIGN_CENTER, 0, 10);
 }
 
 String GuiController::sanitize(const String &text) {
-  // Replace multi-byte UTF-8 sequences with single ASCII chars
-  // Return by value (String) is thread-safe (stack memory)
+  // The UI fonts (Fonts::text14/text20) cover ASCII, Latin-1 (U+00A0..00FF)
+  // and the euro sign. Keep those, map common typographic characters to
+  // ASCII and replace anything else with '?' instead of drawing nothing.
+  String out;
+  out.reserve(text.length());
+  const uint8_t *s = (const uint8_t *)text.c_str();
+  size_t n = text.length();
+  size_t i = 0;
 
-  String buf = text;
+  while (i < n) {
+    uint8_t c = s[i];
+    if (c < 0x80) {
+      out += (char)c;
+      i++;
+      continue;
+    }
 
-  // c-cedilla
-  buf.replace("\xC3\xA7", "c"); // ç
-  buf.replace("\xC3\x87", "C"); // Ç
+    // Decode one UTF-8 sequence
+    size_t len;
+    uint32_t cp;
+    if ((c & 0xE0) == 0xC0) {
+      len = 2;
+      cp = c & 0x1F;
+    } else if ((c & 0xF0) == 0xE0) {
+      len = 3;
+      cp = c & 0x0F;
+    } else if ((c & 0xF8) == 0xF0) {
+      len = 4;
+      cp = c & 0x07;
+    } else {
+      i++; // Stray continuation byte
+      continue;
+    }
+    if (i + len > n)
+      break; // Truncated sequence
+    bool valid = true;
+    for (size_t k = 1; k < len; k++) {
+      if ((s[i + k] & 0xC0) != 0x80) {
+        valid = false;
+        break;
+      }
+      cp = (cp << 6) | (s[i + k] & 0x3F);
+    }
+    if (!valid) {
+      i++;
+      continue;
+    }
 
-  // n-tilde
-  buf.replace("\xC3\xB1", "n"); // ñ
-  buf.replace("\xC3\x91", "N"); // Ñ
+    if ((cp >= 0xA0 && cp <= 0xFF) || cp == 0x20AC) {
+      for (size_t k = 0; k < len; k++)
+        out += (char)s[i + k]; // Covered by the fallback font
+    } else if (cp == 0x2018 || cp == 0x2019) {
+      out += '\'';
+    } else if (cp == 0x201C || cp == 0x201D) {
+      out += '"';
+    } else if (cp == 0x2013 || cp == 0x2014) {
+      out += '-';
+    } else if (cp == 0x2026) {
+      out += "...";
+    } else {
+      out += '?';
+    }
+    i += len;
+  }
+  return out;
+}
 
-  // a-grave/acute
-  buf.replace("\xC3\xA0", "a"); // à
-  buf.replace("\xC3\xA1", "a"); // á
-  buf.replace("\xC3\x80", "A"); // À
-  buf.replace("\xC3\x81", "A"); // Á
+void GuiController::createPageDots(lv_obj_t *parent, int count, int active) {
+  if (count <= 1)
+    return;
 
-  // e-grave/acute
-  buf.replace("\xC3\xA8", "e"); // è
-  buf.replace("\xC3\xA9", "e"); // é
-  buf.replace("\xC3\x88", "E"); // È
-  buf.replace("\xC3\x89", "E"); // É
+  lv_obj_t *row = lv_obj_create(parent);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, LV_SIZE_CONTENT, 6);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, 5, 0);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_align(row, LV_ALIGN_BOTTOM_LEFT, 2, 2);
 
-  // i-acute/dieresis
-  buf.replace("\xC3\xAD", "i"); // í
-  buf.replace("\xC3\xAF", "i"); // ï
-  buf.replace("\xC3\x8D", "I"); // Í
-  buf.replace("\xC3\x8F", "I"); // Ï
-
-  // o-grave/acute
-  buf.replace("\xC3\xB2", "o"); // ò
-  buf.replace("\xC3\xB3", "o"); // ó
-  buf.replace("\xC3\x92", "O"); // Ò
-  buf.replace("\xC3\x93", "O"); // Ó
-
-  // u-acute/dieresis
-  buf.replace("\xC3\xBA", "u"); // ú
-  buf.replace("\xC3\xBC", "u"); // ü
-  buf.replace("\xC3\x9A", "U"); // Ú
-  buf.replace("\xC3\x9C", "U"); // Ü
-
-  return buf;
+  for (int i = 0; i < count; i++) {
+    bool isActive = (i == active);
+    lv_obj_t *dot = lv_obj_create(row);
+    lv_obj_remove_style_all(dot);
+    lv_obj_set_size(dot, isActive ? 14 : 6, 6); // Active page is a pill
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(
+        dot, lv_color_hex(isActive ? 0x00FFFF : 0x555555), 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_CLICKABLE);
+  }
 }
 
 // --- DELEGATED VIEW METHODS ---
@@ -290,6 +345,8 @@ void GuiController::setActiveTimeLabel(lv_obj_t *label) {
 }
 
 void GuiController::updateTime() {
+  BusView::tick(); // Live bus ETA countdown (no-op unless the bus screen is up)
+
   if (activeTimeLabel == NULL)
     return;
   // Previously checked lv_obj_is_valid, but that is unsafe on freed pointers.

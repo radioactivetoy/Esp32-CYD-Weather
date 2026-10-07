@@ -138,6 +138,8 @@ void DataManager::networkTask(void *parameter) {
   // GuiController::showLoadingScreen only queues the message under its own
   // mutex; the GUI task draws it.
   GuiController::showLoadingScreen("Connecting WiFi...");
+  NetworkManager::setStatusCallback(
+      [](const char *msg) { GuiController::showLoadingScreen(msg); });
   NetworkManager::begin();
 
   // Subscribe to the task watchdog only now: the WiFi config portal above may

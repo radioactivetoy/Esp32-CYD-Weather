@@ -1,10 +1,66 @@
 #include "BusView.h"
 #include "DataManager.h"
 #include "GuiController.h"
+#include "NetworkManager.h"
 #include <cstdio>
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
+LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
+
+// --- Live ETA countdown ---
+// Arrival times are fetched every ~60s; in between, tick() counts the visible
+// labels down from the fetch time. The pointers belong to liveScreen and are
+// dropped when LVGL deletes that screen (auto_del after a screen change).
+static const int MAX_ROWS = 6;
+static lv_obj_t *liveLabels[MAX_ROWS];
+static int liveSeconds[MAX_ROWS];
+static int liveCount = 0;
+static lv_obj_t *liveScreen = nullptr;
+static uint32_t liveFetchedAt = 0;
+
+static void onBusScreenDeleted(lv_event_t *e) {
+  if (lv_event_get_target(e) == liveScreen) {
+    liveScreen = nullptr;
+    liveCount = 0;
+  }
+}
+
+// Seconds left for an arrival, accounting for time since the fetch
+static int remainingSeconds(int secondsAtFetch) {
+  int elapsed = liveFetchedAt ? (int)((millis() - liveFetchedAt) / 1000) : 0;
+  int s = secondsAtFetch - elapsed;
+  return s < 0 ? 0 : s;
+}
+
+static void setEtaLabel(lv_obj_t *label, int seconds) {
+  char buf[16];
+  if (seconds < 60)
+    snprintf(buf, sizeof(buf), "Prop");
+  else
+    snprintf(buf, sizeof(buf), "%d min", seconds / 60);
+  lv_label_set_text(label, buf);
+
+  int mins = seconds / 60;
+  uint32_t col = 0x00FF00;
+  if (mins <= 2)
+    col = 0xFF4500;
+  else if (mins <= 5)
+    col = 0xFFFF00;
+  lv_obj_set_style_text_color(label, lv_color_hex(col), 0);
+}
+
+void BusView::forgetLiveLabels() {
+  liveScreen = nullptr;
+  liveCount = 0;
+}
+
+void BusView::tick() {
+  if (!liveScreen)
+    return;
+  for (int i = 0; i < liveCount; i++)
+    setEtaLabel(liveLabels[i], remainingSeconds(liveSeconds[i]));
+}
 
 lv_color_t BusView::getBusLineColor(const String &line, lv_color_t &textColor) {
   textColor = lv_color_hex(0xFFFFFF);
@@ -37,6 +93,12 @@ void BusView::show(const BusData &data, int anim) {
   Serial.println("BusView: Screen Created");
   lv_obj_clean(new_scr);
 
+  // Take over the live countdown; the previous screen's labels are dropped
+  liveScreen = new_scr;
+  liveCount = 0;
+  liveFetchedAt = data.lastUpdate;
+  lv_obj_add_event_cb(new_scr, onBusScreenDeleted, LV_EVENT_DELETE, NULL);
+
   lv_obj_add_event_cb(new_scr, GuiController::handleGesture, LV_EVENT_GESTURE,
                       NULL);
   lv_obj_add_event_cb(new_scr, GuiController::handleScreenClick,
@@ -65,10 +127,13 @@ void BusView::show(const BusData &data, int anim) {
   lv_label_set_long_mode(title, LV_LABEL_LONG_SCROLL_CIRCULAR);
   lv_obj_set_width(title, 160);
   lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0); // Cyan
-  // Ensure font is valid or available
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0); // Font 20
+  lv_obj_set_style_text_font(title, &Fonts::text20, 0); // Accents: "Plaça"
   Serial.println("BusView: Title Set");
   lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0); // Left Aligned (No Icon)
+
+  // Which stop of several (tap to switch)
+  GuiController::createPageDots(header, GuiController::busStopCount,
+                                GuiController::getBusIndex());
 
   // Time
   struct tm timeinfo;
@@ -117,13 +182,29 @@ void BusView::show(const BusData &data, int anim) {
   lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE); // Bubble clicks up
 
   if (data.arrivals.empty()) {
+    const char *msg;
+    if (data.lastUpdate != 0)
+      msg = "No buses right now.";
+    else if (DataManager::isBusUpdating(GuiController::getBusIndex()))
+      msg = "Fetching arrivals...";
+    else if (NetworkManager::getAppId().isEmpty() ||
+             NetworkManager::getAppKey().isEmpty())
+      msg = "TMB App ID / Key not set.\nAdd them in the web settings.";
+    else
+      msg = "Can't reach TMB.\nCheck the App ID / Key.\nRetrying soon.";
+
     lv_obj_t *lbl = lv_label_create(list);
-    lv_label_set_text(lbl, "No buses found or API Error.");
-    lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), 0);
+    lv_label_set_text(lbl, msg);
+    lv_obj_set_width(lbl, LV_PCT(100));
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(0xAAAAAA), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_pad_top(lbl, 80, 0);
     Serial.println("BusView: Empty List");
   } else {
     int idx = 0;
-    int limit = 6;
+    int limit = MAX_ROWS;
     for (const auto &arr : data.arrivals) {
       if (idx >= limit)
         break;
@@ -169,23 +250,18 @@ void BusView::show(const BusData &data, int anim) {
       lv_obj_set_flex_grow(dest, 1);
       lv_label_set_long_mode(dest, LV_LABEL_LONG_SCROLL_CIRCULAR);
       lv_obj_set_style_text_color(dest, lv_color_hex(0xDDDDDD), 0);
-      lv_obj_set_style_text_font(dest, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_font(dest, &Fonts::text14, 0); // Accents
 
       lv_obj_t *timeLbl = lv_label_create(row);
-      lv_label_set_text(timeLbl, arr.text.c_str());
       lv_obj_set_width(timeLbl, 55);
       lv_obj_set_style_text_align(timeLbl, LV_TEXT_ALIGN_RIGHT, 0);
       lv_obj_set_style_text_font(timeLbl, &lv_font_montserrat_14, 0);
-
-      uint32_t eta_col = 0x00FF00;
-      int mins = arr.seconds / 60;
       // No opacity pulse here: an LV_ANIM_REPEAT_INFINITE anim on a child
       // can fire after auto_del frees the old screen.
-      if (mins <= 2)
-        eta_col = 0xFF4500;
-      else if (mins <= 5)
-        eta_col = 0xFFFF00;
-      lv_obj_set_style_text_color(timeLbl, lv_color_hex(eta_col), 0);
+      setEtaLabel(timeLbl, remainingSeconds(arr.seconds));
+      liveLabels[liveCount] = timeLbl;
+      liveSeconds[liveCount] = arr.seconds;
+      liveCount++;
 
       idx++;
     }

@@ -18,6 +18,7 @@ String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
 String NetworkManager::ledBrightness = "medium";
 String NetworkManager::owmApiKey = "";
 String NetworkManager::webPassword = "";
+void (*NetworkManager::statusCallback)(const char *msg) = nullptr;
 WebServer NetworkManager::server(80);
 
 String NetworkManager::getLedBrightness() { return ledBrightness; }
@@ -290,11 +291,18 @@ void NetworkManager::configModeCallback(WiFiManager *myWiFiManager) {
   Serial.println(WiFi.softAPIP());
   Serial.println(myWiFiManager->getConfigPortalSSID());
 
-  char buf[64];
-  sprintf(buf, "Connect to AP:\n%s\nIP: 192.168.4.1",
-          myWiFiManager->getConfigPortalSSID().c_str());
-  // GuiController::showLoadingScreen(buf); // Decoupled to avoid circular dep
+  char buf[128];
+  snprintf(buf, sizeof(buf),
+           "WiFi setup needed\n\nConnect your phone to WiFi\n\"%s\"\n\nthen "
+           "open 192.168.4.1",
+           myWiFiManager->getConfigPortalSSID().c_str());
   Serial.println(buf);
+  if (statusCallback)
+    statusCallback(buf); // Show the instructions on screen
+}
+
+void NetworkManager::setStatusCallback(void (*cb)(const char *msg)) {
+  statusCallback = cb;
 }
 
 void NetworkManager::begin() {

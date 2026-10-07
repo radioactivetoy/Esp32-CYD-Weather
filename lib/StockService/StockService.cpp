@@ -37,6 +37,7 @@ std::vector<StockItem> StockService::getQuotes(const String &symbols) {
       filter["chart"]["result"][0]["meta"]["regularMarketPrice"] = true;
       filter["chart"]["result"][0]["meta"]["previousClose"] = true;
       filter["chart"]["result"][0]["meta"]["chartPreviousClose"] = true;
+      filter["chart"]["result"][0]["meta"]["currency"] = true;
 
       JsonDocument doc;
       DeserializationError error = deserializeJson(
@@ -54,6 +55,7 @@ std::vector<StockItem> StockService::getQuotes(const String &symbols) {
         if (price != 0.0f) {
           StockItem item;
           item.symbol = symbol;
+          item.currency = meta["currency"] | "";
           item.price = price;
           item.changePercent =
               (prevClose != 0.0f) ? ((price - prevClose) / prevClose) * 100.0f

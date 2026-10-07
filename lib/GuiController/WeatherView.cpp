@@ -9,20 +9,25 @@ LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(lv_font_montserrat_24);
 LV_FONT_DECLARE(lv_font_montserrat_32);
 
-// Helper for Month Names
-static const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+static const char *weekdays[] = {"Sun", "Mon", "Tue", "Wed",
+                                 "Thu", "Fri", "Sat"};
 
+// Day of week for a Gregorian date, 0 = Sunday (Sakamoto's method)
+static int dayOfWeek(int y, int m, int d) {
+  static const int t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+  if (m < 3)
+    y -= 1;
+  return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
+}
+
+// "YYYY-MM-DD" -> "Wed 8" (output must hold at least 16 chars)
 void WeatherView::formatDate(const char *input, char *output) {
   int y, m, d;
-  if (sscanf(input, "%d-%d-%d", &y, &m, &d) == 3) {
-    if (m >= 1 && m <= 12) {
-      sprintf(output, "%d %s", d, months[m - 1]); // Format: "DD Month"
-    } else {
-      strcpy(output, input); // Fallback
-    }
+  if (sscanf(input, "%d-%d-%d", &y, &m, &d) == 3 && m >= 1 && m <= 12 &&
+      d >= 1 && d <= 31) {
+    snprintf(output, 16, "%s %d", weekdays[dayOfWeek(y, m, d)], d);
   } else {
-    strcpy(output, input);
+    snprintf(output, 16, "%s", input);
   }
 }
 
@@ -191,8 +196,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   lv_obj_set_width(city_lbl, 160); // Reduced to 160 as per user request
   lv_label_set_long_mode(city_lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
   lv_obj_set_style_text_color(city_lbl, lv_color_hex(0x00FFFF), 0);
-  lv_obj_set_style_text_font(city_lbl, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_font(city_lbl, &Fonts::text20, 0); // Accents: "Vallès"
   lv_obj_align(city_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
+
+  // Which city of several (swipe left/right)
+  GuiController::createPageDots(header_row, GuiController::cityCount,
+                                GuiController::getCityIndex());
 
   String titleText = String(data.cityName.length() > 0
                                 ? GuiController::sanitize(data.cityName).c_str()
@@ -250,7 +259,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
     // Glass Card
     lv_obj_t *glass_card = lv_obj_create(bg_grad);
-    lv_obj_set_size(glass_card, 180, 155); // Reduced 165->155
+    lv_obj_set_size(glass_card, 180, 172); // 155 + "Feels like" line
     lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
                  38); // Align below header (moved up 45->38)
     lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
@@ -317,6 +326,13 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_label_set_text(arrow_r, "-");
       lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x888888), 0);
     }
+
+    // Feels like
+    lv_obj_t *feels_lbl = lv_label_create(glass_card);
+    snprintf(buf, sizeof(buf), "Feels like %.0f°", data.currentFeelsLike);
+    lv_label_set_text(feels_lbl, buf);
+    lv_obj_set_style_text_font(feels_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(feels_lbl, lv_color_hex(0x999999), 0);
 
     // H/L
     lv_obj_t *hl_lbl = lv_label_create(glass_card);
@@ -418,13 +434,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     snprintf(buf, sizeof(buf), "%.0f hPa", data.currentPressure);
     add_pill("Pressure", buf, 0xFFFFFF);
 
-    char aqiBuf[32];
-    uint32_t aqiColor = 0x00FF00; // Good (1)
-    if (data.currentAQI <= 0) {
-      snprintf(aqiBuf, sizeof(aqiBuf), "AQI: --"); // Unknown / no OWM key
-      aqiColor = 0x888888;
-    } else {
-      snprintf(aqiBuf, sizeof(aqiBuf), "AQI: %d", data.currentAQI);
+    // OWM scale 1..5 shown as words ("Good", "Fair", ...); "--" if unknown
+    const char *aqiText = "--"; // No OWM key or fetch failed
+    uint32_t aqiColor = 0x888888;
+    if (data.currentAQI >= 1) {
+      aqiText = WeatherService::getAQIDesc(data.currentAQI);
+      aqiColor = 0x00FF00; // Good (1)
     }
     if (data.currentAQI == 2)
       aqiColor = 0xADFF2F; // Fair (GreenYellow)
@@ -434,7 +449,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       aqiColor = 0xFFA500; // Poor (Orange)
     else if (data.currentAQI >= 5)
       aqiColor = 0xFF4500; // Very Poor (OrangeRed)
-    add_pill("Quality", aqiBuf, aqiColor);
+    add_pill("Air Quality", aqiText, aqiColor);
 
   } else if (forecastMode == 1 || forecastMode == 2) {
     // === LIST VIEWS ===
@@ -481,12 +496,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
         else
           lv_label_set_text(time_lbl, "--:--");
       } else {
-        if (data.daily[i].date.length() > 0) {
-          char dateBuf[32];
-          formatDate(data.daily[i].date.c_str(), dateBuf);
-          lv_label_set_text(time_lbl, dateBuf);
-        } else
-          lv_label_set_text(time_lbl, "Day");
+        char dateBuf[16];
+        if (i == 0)
+          snprintf(dateBuf, sizeof(dateBuf), "Today");
+        else
+          formatDate(data.daily[i].date.c_str(), dateBuf); // "Wed 8"
+        lv_label_set_text(time_lbl, dateBuf);
       }
       lv_obj_set_style_text_color(time_lbl, lv_color_hex(0xFFFFFF), 0);
 
@@ -501,7 +516,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       createWeatherIcon(icon_box,
                         isHourly ? data.hourly[i].weatherCode
                                  : data.daily[i].weatherCode,
-                        false);
+                        isHourly && data.hourly[i].isNight); // Daily: day icon
       if (lv_obj_get_child(icon_box, 0))
         lv_img_set_zoom(lv_obj_get_child(icon_box, 0), 160);
 

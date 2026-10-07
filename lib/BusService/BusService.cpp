@@ -1,37 +1,6 @@
 #include "BusService.h"
 #include <algorithm> // For sort
 
-// Helper to remove Latin chars for display compatibility
-static String sanitize(String input) {
-  input.replace("á", "a");
-  input.replace("à", "a");
-  input.replace("Á", "A");
-  input.replace("À", "A");
-  input.replace("é", "e");
-  input.replace("è", "e");
-  input.replace("É", "E");
-  input.replace("È", "E");
-  input.replace("í", "i");
-  input.replace("Í", "I");
-  input.replace("ï", "i");
-  input.replace("Ï", "I");
-  input.replace("ó", "o");
-  input.replace("ò", "o");
-  input.replace("Ó", "O");
-  input.replace("Ò", "O");
-  input.replace("ú", "u");
-  input.replace("ù", "u");
-  input.replace("ü", "u");
-  input.replace("Ú", "U");
-  input.replace("Ü", "U");
-  input.replace("ñ", "n");
-  input.replace("Ñ", "N");
-  input.replace("ç", "c");
-  input.replace("Ç", "C");
-  input.replace("·", ".");
-  return input;
-}
-
 // TMB API: https://developer.tmb.cat/api-docs/v1/transit
 // Endpoint: /ibus/stops/{stopCode}
 
@@ -93,8 +62,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
     JsonObject p = parades[0];
     String stopName = p["nom_parada"].as<String>();
     if (stopName.length() > 0) {
-      data.stopName = sanitize(stopName);
-      // Serial.println("Stop Name (Updated): " + data.stopName);
+      data.stopName = stopName; // Raw UTF-8; the UI renders accents
     }
 
     data.arrivals.clear();
@@ -105,7 +73,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
       String lineName = l["nom_linia"].as<String>();
       // Removed line filter logic
 
-      String destination = sanitize(l["desti_trajecte"].as<String>());
+      String destination = l["desti_trajecte"].as<String>();
       JsonArray buses = l["propers_busos"];
 
       for (JsonObject b : buses) {
@@ -120,14 +88,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
         BusArrival arr;
         arr.line = lineName;
         arr.destination = destination;
-        arr.seconds = diffSeconds;
-
-        // Create text representation
-        if (diffSeconds < 60) {
-          arr.text = "Prop";
-        } else {
-          arr.text = String(diffSeconds / 60) + " min";
-        }
+        arr.seconds = diffSeconds; // BusView formats and counts it down
 
         data.arrivals.push_back(arr);
       }

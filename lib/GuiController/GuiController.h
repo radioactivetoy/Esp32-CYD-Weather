@@ -4,6 +4,7 @@
 #include <atomic>
 
 #include "BusService.h"
+#include "Fonts.h"
 #include "StockService.h"
 #include "WeatherService.h"
 #include "lvgl.h"
@@ -29,7 +30,9 @@ public:
   static void requestRefresh(); // Deferred refresh of the active screen
   static void updateTime();                        // Efficient clock update
   static void setActiveTimeLabel(lv_obj_t *label); // New setter
-  static String sanitize(const String &text);      // Safe Return by Value
+  static String sanitize(const String &text); // Fit text to the UI fonts
+  // "● ○ ○" page indicator aligned to the parent's bottom-left (count > 1)
+  static void createPageDots(lv_obj_t *parent, int count, int active);
 
   static bool isBusScreenActive();
   static bool isStockScreenActive();
