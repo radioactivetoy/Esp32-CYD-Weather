@@ -97,8 +97,7 @@ void StockView::show(const std::vector<StockItem> &data, int anim) {
       lv_obj_set_flex_flow(left, LV_FLEX_FLOW_COLUMN);
       Theme::label(left, item.symbol.c_str(), &Theme::body, Theme::TEXT);
       if (item.currency.length() > 0)
-        Theme::label(left, item.currency.c_str(), &Theme::small,
-                     Theme::TEXT_DIM);
+        Theme::label(left, item.currency.c_str(), &Theme::small, Theme::TEXT);
 
       // Right: price over the day's change (the only coloured value)
       lv_obj_t *right = Theme::plainBox(row);

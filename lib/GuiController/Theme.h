@@ -4,8 +4,8 @@
 
 // App-wide look: black background, hairline dividers instead of boxes,
 // colour only where it means something. Data is always TEXT (white) or a
-// meaning colour; TEXT_DIM is only for labels, captions, units, status
-// messages and "--" (no data).
+// meaning colour; TEXT_DIM is only for labels, captions, status messages
+// and "--" (no data).
 namespace Theme {
 
 // --- Colours ---
