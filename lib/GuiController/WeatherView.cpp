@@ -1,6 +1,7 @@
 #include "WeatherView.h"
 #include "DataManager.h"
 #include "GuiController.h"
+#include "Theme.h"
 #include <cstdio>
 
 LV_FONT_DECLARE(lv_font_montserrat_14);
@@ -180,27 +181,14 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
 
   char buf[128];
 
-  // Base Background
-  lv_obj_set_style_bg_color(new_scr, lv_color_hex(0x000000), 0);
+  // Flat theme background (the screen and the full-size body container,
+  // which carries the tap / long-press handlers)
+  lv_obj_set_style_bg_color(new_scr, lv_color_hex(Theme::BG), 0);
   lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
-
-  // Dynamic Glow
-  uint32_t glow_color = 0x111111;
-  int code = data.currentWeatherCode;
-  if (code == 0 || code == 1)
-    glow_color = 0x001F3F;
-  else if (code == 2 || code == 3)
-    glow_color = 0x222222;
-  else if (code >= 51 && code <= 67)
-    glow_color = 0x0C192C;
-  else if (code >= 95)
-    glow_color = 0x1A0033;
 
   lv_obj_t *bg_grad = lv_obj_create(new_scr);
   lv_obj_set_size(bg_grad, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(bg_grad, lv_color_hex(glow_color), 0);
-  lv_obj_set_style_bg_grad_color(bg_grad, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_grad_dir(bg_grad, LV_GRAD_DIR_VER, 0);
+  lv_obj_set_style_bg_color(bg_grad, lv_color_hex(Theme::BG), 0);
   lv_obj_set_style_bg_opa(bg_grad, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(bg_grad, 0, 0);
   lv_obj_set_style_pad_all(bg_grad, 0, 0); // Fix: Remove default padding
@@ -287,250 +275,111 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                                     GuiController::getCityIndex())
                                     ? "Fetching weather..."
                                     : "No weather data yet.\nRetrying soon.");
-    lv_obj_set_style_text_color(wait_lbl, lv_color_hex(0xAAAAAA), 0);
+    lv_obj_set_style_text_color(wait_lbl, lv_color_hex(Theme::TEXT_DIM), 0);
     lv_obj_set_style_text_font(wait_lbl, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(wait_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(wait_lbl, LV_ALIGN_CENTER, 0, 0);
   } else if (forecastMode == 0) {
-    // === CURRENT WEATHER ===
+    // === CURRENT WEATHER: hero (icon + big temperature) over a details grid
 
-    // Glass Card
-    lv_obj_t *glass_card = lv_obj_create(bg_grad);
-    lv_obj_set_size(glass_card, 180, 170); // 155 + "Feels like" line
-    lv_obj_align(glass_card, LV_ALIGN_TOP_MID, 0,
-                 38); // Align below header (moved up 45->38)
-    lv_obj_set_style_bg_color(glass_card, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(glass_card, LV_OPA_60, 0);
-    lv_obj_set_style_radius(glass_card, 15, 0);
-    lv_obj_set_style_border_width(glass_card, 2, 0); // Increased 1->2
-    lv_obj_set_style_border_color(glass_card, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_opa(glass_card, LV_OPA_70, 0);
-    lv_obj_set_flex_flow(glass_card, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(glass_card, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(glass_card, 5, 0);
-    lv_obj_set_style_pad_row(glass_card, 2,
-                             0); // Minimize internal vertical gap
-    lv_obj_clear_flag(glass_card, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(glass_card, LV_OBJ_FLAG_CLICKABLE |
-                                    LV_OBJ_FLAG_EVENT_BUBBLE |
-                                    LV_OBJ_FLAG_GESTURE_BUBBLE);
-
-    lv_obj_t *icon_wrap = lv_obj_create(glass_card);
-    lv_obj_set_size(icon_wrap, 50, 50); // Reduced 60->50 to save vertical space
-    lv_obj_set_style_bg_opa(icon_wrap, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(icon_wrap, 0, 0);
-    lv_obj_clear_flag(icon_wrap,
-                      LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    // Hero icon at native 64px
+    lv_obj_t *icon_wrap = lv_obj_create(bg_grad);
+    lv_obj_remove_style_all(icon_wrap);
+    lv_obj_set_size(icon_wrap, 72, 72);
+    lv_obj_set_pos(icon_wrap, 14, 50);
+    lv_obj_clear_flag(icon_wrap, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
-    if (lv_obj_get_child(icon_wrap, 0))
-      lv_img_set_zoom(lv_obj_get_child(icon_wrap, 0),
-                      200); // 64px icon -> 50px, fits the 50x50 box
 
-    // Temp Row
-    lv_obj_t *temp_row = lv_obj_create(glass_card);
-    lv_obj_set_size(temp_row, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(temp_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(temp_row, 0, 0);
-    lv_obj_set_flex_flow(temp_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(temp_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(temp_row, 0, 0);
-    lv_obj_set_style_pad_column(temp_row, 8, 0);
-    lv_obj_clear_flag(temp_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    // Big temperature in whole degrees (the decimal is false precision)
+    snprintf(buf, sizeof(buf), "%d\xC2\xB0", (int)lroundf(data.currentTemp));
+    lv_obj_t *temp_lbl = Theme::label(bg_grad, buf, &Theme::digits,
+                                      Theme::tempColor(data.currentTemp));
+    lv_obj_set_pos(temp_lbl, 100, 40);
 
-    // Temp
-    lv_obj_t *temp_lbl = lv_label_create(temp_row);
-    snprintf(buf, sizeof(buf), "%.1f°C", data.currentTemp);
-    lv_label_set_text(temp_lbl, buf);
-    lv_obj_set_style_text_font(temp_lbl, &lv_font_montserrat_32,
-                               0); // Upgrade 24->32
-    // Colour by temperature: icy blue .. white .. warm amber .. hot red
-    uint32_t tempColor = 0xFFFFFF;
-    if (data.currentTemp < 0)
-      tempColor = 0x88AAFF;
-    else if (data.currentTemp < 10)
-      tempColor = 0xAADDFF;
-    else if (data.currentTemp >= 28)
-      tempColor = 0xFF5533;
-    else if (data.currentTemp >= 20)
-      tempColor = 0xFFCC44;
-    lv_obj_set_style_text_color(temp_lbl, lv_color_hex(tempColor), 0);
-
-    // Right Arrow - Floating to keep Temp centered
-    lv_obj_t *arrow_r = lv_label_create(temp_row);
-    lv_obj_add_flag(arrow_r, LV_OBJ_FLAG_FLOATING);
-    lv_obj_align(arrow_r, LV_ALIGN_RIGHT_MID, -10,
-                 0); // Add 10px padding from right edge
-    float diffR = data.daily[1].maxTemp - data.daily[0].maxTemp;
-    if (diffR >= 1.0) {
-      lv_label_set_text(arrow_r, LV_SYMBOL_UP);
-      lv_obj_set_style_text_color(arrow_r, lv_color_hex(0xFF5555), 0);
-    } else if (diffR <= -1.0) {
-      lv_label_set_text(arrow_r, LV_SYMBOL_DOWN);
-      lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x5555FF), 0);
-    } else {
-      lv_label_set_text(arrow_r, "-");
-      lv_obj_set_style_text_color(arrow_r, lv_color_hex(0x888888), 0);
+    // Tomorrow warmer / cooler (by >= 1 degree); nothing when about the same
+    float diff = data.daily[1].maxTemp - data.daily[0].maxTemp;
+    if (data.daily[1].date.length() > 0 && fabsf(diff) >= 1.0f) {
+      lv_obj_t *arrow =
+          Theme::label(bg_grad, diff > 0 ? LV_SYMBOL_UP : LV_SYMBOL_DOWN,
+                       &lv_font_montserrat_14, diff > 0 ? 0xFF7755 : 0x6688FF);
+      lv_obj_align_to(arrow, temp_lbl, LV_ALIGN_OUT_RIGHT_TOP, 4, 10);
     }
 
-    // Feels like
-    lv_obj_t *feels_lbl = lv_label_create(glass_card);
-    snprintf(buf, sizeof(buf), "Feels like %.0f°", data.currentFeelsLike);
-    lv_label_set_text(feels_lbl, buf);
-    lv_obj_set_style_text_font(feels_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(feels_lbl, lv_color_hex(0x999999), 0);
+    lv_obj_t *desc = Theme::label(bg_grad, getWeatherDesc(data.currentWeatherCode),
+                                  &Theme::body, Theme::TEXT);
+    lv_obj_set_width(desc, 132);
+    lv_label_set_long_mode(desc, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(desc, 102, 98);
 
-    // H/L
-    lv_obj_t *hl_lbl = lv_label_create(glass_card);
-    snprintf(buf, sizeof(buf), "H:%.0f° L:%.0f°", data.daily[0].maxTemp,
-             data.daily[0].minTemp);
-    lv_label_set_text(hl_lbl, buf); // Restored!
-    lv_obj_set_style_text_font(hl_lbl, &lv_font_montserrat_16,
-                               0); // Upgrade H/L 14->16
-    lv_obj_set_style_text_color(hl_lbl, lv_color_hex(0xCCCCCC), 0);
-    lv_obj_set_style_pad_top(hl_lbl, 0, 0);
+    snprintf(buf, sizeof(buf), "H %.0f\xC2\xB0  \xC2\xB7  L %.0f\xC2\xB0",
+             data.daily[0].maxTemp, data.daily[0].minTemp);
+    lv_obj_t *hl = Theme::label(bg_grad, buf, &Fonts::text14, Theme::TEXT_DIM);
+    lv_obj_set_pos(hl, 102, 120);
 
-    // Desc
-    // Desc Container (Desc + Rain%)
-    lv_obj_t *desc_row = lv_obj_create(glass_card);
-    lv_obj_set_size(desc_row, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(desc_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(desc_row, 0, 0);
-    lv_obj_set_flex_flow(desc_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(desc_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(desc_row, 0, 0);
-    lv_obj_set_style_pad_top(desc_row, 2, 0);
-    lv_obj_clear_flag(desc_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    Theme::divider(bg_grad, 10, 148, 220);
 
-    // Weather Description
-    lv_obj_t *desc_lbl = lv_label_create(desc_row);
-    lv_label_set_text(desc_lbl, getWeatherDesc(data.currentWeatherCode));
-    lv_obj_set_style_text_color(desc_lbl, lv_color_hex(0xFFD700), 0);
-    lv_obj_set_style_text_font(desc_lbl, &lv_font_montserrat_16, 0);
+    // Details grid: 2 columns x 4 rows of label / value
+    const lv_coord_t colA = 14, colB = 124;
+    auto rowY = [](int r) -> lv_coord_t { return 156 + r * 40; };
 
-    // Rain % (Appended)
-    if (data.currentRainProb > 0.0) {
-      lv_obj_t *rain_appended = lv_label_create(desc_row);
-      char rBuf[16];
-      snprintf(rBuf, sizeof(rBuf), " %.0f%%",
-               data.currentRainProb * 100.0); // Space prefix
-      lv_label_set_text(rain_appended, rBuf);
-      lv_obj_set_style_text_color(rain_appended, lv_color_hex(0x00BFFF),
-                                  0); // Blue
-      lv_obj_set_style_text_font(rain_appended, &lv_font_montserrat_16, 0);
-    }
+    snprintf(buf, sizeof(buf), "%.0f\xC2\xB0", data.currentFeelsLike);
+    Theme::cell(bg_grad, colA, rowY(0), "Feels like", buf);
 
-    // Sunrise / sunset, in the gap between the card (ends y=208) and the
-    // pills (start y=228)
-    if (data.sunrise.length() > 0 && data.sunset.length() > 0) {
-      lv_obj_t *sun_lbl = lv_label_create(bg_grad);
-      snprintf(buf, sizeof(buf), "Sunrise %s  \xC2\xB7  Sunset %s", // ·
-               data.sunrise.c_str(), data.sunset.c_str());
-      lv_label_set_text(sun_lbl, buf);
-      lv_obj_set_style_text_font(sun_lbl, &Fonts::text14, 0);
-      lv_obj_set_style_text_color(sun_lbl, lv_color_hex(0xFFCC66), 0);
-      lv_obj_align(sun_lbl, LV_ALIGN_TOP_MID, 0, 209);
-    }
-
-    // Pills
-    lv_obj_t *details_cont = lv_obj_create(bg_grad);
-    lv_obj_set_size(details_cont, 220, 90);
-    lv_obj_align(details_cont, LV_ALIGN_BOTTOM_MID, 0,
-                 -2); // Moved lower -15 -> -2
-    lv_obj_set_style_bg_opa(details_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(details_cont, 0, 0);
-    lv_obj_set_flex_flow(details_cont, LV_FLEX_FLOW_ROW_WRAP);
-    lv_obj_set_flex_align(details_cont, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(details_cont, 0, 0);
-    lv_obj_clear_flag(details_cont, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(details_cont, LV_OBJ_FLAG_CLICKABLE |
-                                      LV_OBJ_FLAG_EVENT_BUBBLE |
-                                      LV_OBJ_FLAG_GESTURE_BUBBLE);
-
-    auto add_pill = [&](const char *label, const char *value, uint32_t color) {
-      lv_obj_t *pill = lv_obj_create(details_cont);
-      lv_obj_set_size(pill, 105, 40);
-      lv_obj_set_style_bg_color(pill, lv_color_hex(0x2A2A2A), 0);
-      lv_obj_set_style_bg_opa(pill, LV_OPA_80, 0);
-      lv_obj_set_style_radius(pill, 10, 0);
-      lv_obj_set_style_border_width(pill, 2, 0); // Increased 1->2
-      lv_obj_set_style_border_color(pill, lv_color_hex(0xAAAAAA),
-                                    0); // Lighter 55->77
-      lv_obj_set_style_border_opa(pill, LV_OPA_70, 0);
-      lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_COLUMN);
-      lv_obj_set_flex_align(pill, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                            LV_FLEX_ALIGN_CENTER);
-      lv_obj_set_style_pad_all(pill, 0, 0);
-      lv_obj_set_style_pad_row(pill, 0, 0); // Added: Remove gap between lines
-      lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-
-      lv_obj_t *v = lv_label_create(pill);
-      lv_label_set_text(v, value);
-      lv_obj_set_style_text_color(v, lv_color_hex(color), 0);
-      lv_obj_set_style_text_font(v, &lv_font_montserrat_16,
-                                 0); // Upgrade 14->16
-
-      lv_obj_t *l = lv_label_create(pill);
-      lv_label_set_text(l, label);
-      lv_obj_set_style_text_color(l, lv_color_hex(0xFFFFFF),
-                                  0); // Brighter Grey
-      lv_obj_set_style_text_font(l, &lv_font_montserrat_16,
-                                 0); // Upgrade 14->16
-    };
+    snprintf(buf, sizeof(buf), "%.0f%%", data.currentRainProb * 100.0f);
+    Theme::cell(bg_grad, colB, rowY(0), "Rain", buf, Theme::RAIN);
 
     snprintf(buf, sizeof(buf), "%d%%", data.currentHumidity);
-    add_pill("Humidity", buf, 0xFFFFFF);
+    Theme::cell(bg_grad, colA, rowY(1), "Humidity", buf);
 
-    snprintf(buf, sizeof(buf), "%.0f km/h", data.windSpeed);
-    char windLabel[16];
-    snprintf(windLabel, sizeof(windLabel), "Wind %s",
+    // Wind: coloured only when it matters
+    snprintf(buf, sizeof(buf), "%.0f km/h %s", data.windSpeed,
              getWindDir(data.windDirection));
-    uint32_t windColor = 0x90EE90; // Calm
-    if (data.windSpeed >= 20)
-      windColor = 0xFFFF00; // Breezy
-    if (data.windSpeed >= 40)
-      windColor = 0xFF9900; // Strong
+    uint32_t windColor = Theme::TEXT;
     if (data.windSpeed >= 60)
-      windColor = 0xFF4444; // Gale
-    add_pill(windLabel, buf, windColor);
+      windColor = Theme::ALERT;
+    else if (data.windSpeed >= 40)
+      windColor = 0xFF9900;
+    Theme::cell(bg_grad, colB, rowY(1), "Wind", buf, windColor);
 
-    // UV index (WHO scale colours); "--" when unknown
-    uint32_t uvColor = 0x888888;
+    // UV index with its WHO level
+    uint32_t uvColor = Theme::TEXT_DIM;
     if (data.uvIndex >= 0) {
-      snprintf(buf, sizeof(buf), "%.0f", data.uvIndex);
-      uvColor = 0x00FF00; // Low (0-2)
-      if (data.uvIndex >= 3)
-        uvColor = 0xFFFF00; // Moderate
-      if (data.uvIndex >= 6)
-        uvColor = 0xFF8800; // High
-      if (data.uvIndex >= 8)
-        uvColor = 0xFF4444; // Very high
-      if (data.uvIndex >= 11)
-        uvColor = 0xFF00FF; // Extreme
+      const char *level = "low";
+      uvColor = Theme::GOOD;
+      if (data.uvIndex >= 11) {
+        level = "extreme";
+        uvColor = 0xFF00FF;
+      } else if (data.uvIndex >= 8) {
+        level = "very high";
+        uvColor = Theme::ALERT;
+      } else if (data.uvIndex >= 6) {
+        level = "high";
+        uvColor = 0xFF8800;
+      } else if (data.uvIndex >= 3) {
+        level = "moderate";
+        uvColor = Theme::WARN;
+      }
+      snprintf(buf, sizeof(buf), "%.0f %s", data.uvIndex, level);
     } else {
       snprintf(buf, sizeof(buf), "--");
     }
-    add_pill("UV Index", buf, uvColor);
+    Theme::cell(bg_grad, colA, rowY(2), "UV index", buf, uvColor);
 
-    // OWM scale 1..5 shown as words ("Good", "Fair", ...); "--" if unknown
+    // Air quality, OWM scale 1..5 as words
     const char *aqiText = "--"; // No OWM key or fetch failed
-    uint32_t aqiColor = 0x888888;
+    uint32_t aqiColor = Theme::TEXT_DIM;
     if (data.currentAQI >= 1) {
       aqiText = WeatherService::getAQIDesc(data.currentAQI);
-      aqiColor = 0x00FF00; // Good (1)
+      static const uint32_t aqiColors[] = {Theme::GOOD, 0xAADD33, Theme::WARN,
+                                           0xFF9900, Theme::ALERT};
+      aqiColor = aqiColors[min(data.currentAQI, 5) - 1];
     }
-    if (data.currentAQI == 2)
-      aqiColor = 0xADFF2F; // Fair (GreenYellow)
-    else if (data.currentAQI == 3)
-      aqiColor = 0xFFFF00; // Moderate (Yellow)
-    else if (data.currentAQI == 4)
-      aqiColor = 0xFFA500; // Poor (Orange)
-    else if (data.currentAQI >= 5)
-      aqiColor = 0xFF4500; // Very Poor (OrangeRed)
-    add_pill("Air Quality", aqiText, aqiColor);
+    Theme::cell(bg_grad, colB, rowY(2), "Air quality", aqiText, aqiColor);
+
+    Theme::cell(bg_grad, colA, rowY(3), "Sunrise",
+                data.sunrise.length() ? data.sunrise.c_str() : "--:--");
+    Theme::cell(bg_grad, colB, rowY(3), "Sunset",
+                data.sunset.length() ? data.sunset.c_str() : "--:--");
 
   } else if (forecastMode == 1 || forecastMode == 2) {
     // === LIST VIEWS ===
