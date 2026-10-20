@@ -247,7 +247,9 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     // === CURRENT WEATHER: hero (icon + big temperature) over a details grid
 
     // Hero: icon + text column (temperature, description, H/L) as one group,
-    // centred on the screen, with the icon centred on the column's height
+    // aligned to the grid's left edge, with the icon centred on the column's
+    // height. (Centring the group on the screen left a wider margin on the
+    // left than the grid below, so the icon looked pushed to the right.)
     auto plainBox = [](lv_obj_t *parent) {
       lv_obj_t *o = lv_obj_create(parent);
       lv_obj_remove_style_all(o); // No padding, border or background
@@ -259,9 +261,12 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_size(hero, LV_PCT(100), 104);
     lv_obj_set_pos(hero, 0, 40);
     lv_obj_set_flex_flow(hero, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+    lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(hero, 10, 0);
+    // The icon image has ~3px of margin, so its artwork starts at ~x=14,
+    // like the grid labels
+    lv_obj_set_style_pad_left(hero, Theme::SIDE, 0);
 
     // Shown 1:1 (sharp): the icons are cropped so the artwork fills its
     // 64px image (tools/convert_meteocons.py)
