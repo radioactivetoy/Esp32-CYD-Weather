@@ -13,6 +13,13 @@ public:
 
   static void handleClient(); // New: Handle web requests
 
+  // Keeps WiFi up. Call every pass of the network task; never blocks.
+  // The Arduino core retries a lost connection only once and only for some
+  // disconnect reasons, so this keeps retrying: reconnect() every 15s, a
+  // full disconnect/begin after 2 min, a clean restart after 10 min offline.
+  // Returns true while connected.
+  static bool maintainWiFi();
+
   // Receives user-facing status messages (e.g. WiFi setup instructions).
   // A callback keeps this module independent of the GUI.
   static void setStatusCallback(void (*cb)(const char *msg));

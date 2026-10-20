@@ -25,4 +25,14 @@ void logPeriodic();
 
 String formatUptime(uint32_t seconds); // "3d 04:12"
 
+// Why the chip last started: "power-on or reset button", "crash (panic)",
+// "task watchdog", "brownout (power dip)", ...
+const char *resetReason();
+
+// WiFi disconnect counting. begin() registers the WiFi event handler; call
+// it once before connecting.
+void begin();
+uint32_t wifiDisconnects();         // Since boot
+const char *lastDisconnectReason(); // "none" until the first drop
+
 } // namespace SystemMonitor

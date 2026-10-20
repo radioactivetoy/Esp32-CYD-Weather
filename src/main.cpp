@@ -66,6 +66,7 @@ void updateBacklight() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.printf("BOOT: last reset: %s\n", SystemMonitor::resetReason());
 
   // --- HARDWARE INIT ---
   touch.begin();

@@ -1,5 +1,7 @@
 #include "SystemMonitor.h"
 #include <WiFi.h>
+#include <atomic>
+#include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -35,6 +37,51 @@ Stats read() {
   return s;
 }
 
+// Written by the WiFi event task, read elsewhere
+static std::atomic<uint32_t> disconnects{0};
+static std::atomic<uint8_t> lastReason{0};
+
+void begin() {
+  WiFi.onEvent(
+      [](WiFiEvent_t, WiFiEventInfo_t info) {
+        disconnects++;
+        lastReason = info.wifi_sta_disconnected.reason;
+      },
+      ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+}
+
+uint32_t wifiDisconnects() { return disconnects; }
+
+const char *lastDisconnectReason() {
+  uint8_t r = lastReason;
+  return r ? WiFi.disconnectReasonName((wifi_err_reason_t)r) : "none";
+}
+
+const char *resetReason() {
+  switch (esp_reset_reason()) {
+  case ESP_RST_POWERON:
+    return "power-on or reset button";
+  case ESP_RST_EXT:
+    return "external reset";
+  case ESP_RST_SW:
+    return "software restart";
+  case ESP_RST_PANIC:
+    return "crash (panic)";
+  case ESP_RST_INT_WDT:
+    return "interrupt watchdog";
+  case ESP_RST_TASK_WDT:
+    return "task watchdog";
+  case ESP_RST_WDT:
+    return "watchdog";
+  case ESP_RST_BROWNOUT:
+    return "brownout (power dip)";
+  case ESP_RST_DEEPSLEEP:
+    return "deep sleep wake";
+  default:
+    return "unknown";
+  }
+}
+
 String formatUptime(uint32_t seconds) {
   char buf[24];
   uint32_t days = seconds / 86400;
@@ -56,9 +103,10 @@ void logPeriodic() {
 
   Stats s = read();
   Serial.printf("MON: up %s | heap %u (min %u, largest %u) | stack free "
-                "loop %d, net %d | RSSI %d\n",
+                "loop %d, net %d | RSSI %d, %u WiFi drops\n",
                 formatUptime(s.uptimeS).c_str(), s.heapFree, s.heapMinFree,
-                s.heapLargest, s.loopStackFree, s.netStackFree, s.rssi);
+                s.heapLargest, s.loopStackFree, s.netStackFree, s.rssi,
+                wifiDisconnects());
 
   if (s.loopStackFree >= 0 && (uint32_t)s.loopStackFree < STACK_WARN_BYTES)
     Serial.printf("MON: WARNING loopTask stack low (%d bytes left)\n",

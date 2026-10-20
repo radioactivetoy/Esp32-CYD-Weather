@@ -1,6 +1,7 @@
 #include "WeatherService.h"
 #include "NetUtils.h"
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 #include <time.h>
 
 // Map an OWM icon id ("01d", "10n", ...) to the closest WMO weather code.
@@ -45,7 +46,11 @@ static void toCityLocal(time_t utc, long offsetSec, struct tm &out) {
 // Opens an HTTPS GET; returns true only on HTTP 200.
 static bool httpsGet(HTTPClient &http, WiFiClientSecure &client,
                      const String &url, uint16_t timeoutMs) {
+  // A city refresh chains up to 5 requests; feed the network task's
+  // watchdog before each one (no-op for tasks that are not subscribed)
+  esp_task_wdt_reset();
   client.setInsecure();
+  client.setHandshakeTimeout(10); // Seconds; default 120 exceeds the watchdog
   if (!http.begin(client, url))
     return false;
   http.useHTTP10(true); // No chunked encoding: we parse straight from the stream

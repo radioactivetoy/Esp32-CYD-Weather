@@ -3,6 +3,7 @@
 #include "SystemMonitor.h"
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>
+#include <atomic>
 #include <esp_task_wdt.h>
 
 // mDNS name for OTA uploads and the settings page: http://weatherclock.local
@@ -49,6 +50,58 @@ std::vector<String> NetworkManager::getCities() {
 }
 
 void NetworkManager::saveConfigCallback() { shouldSaveConfig = true; }
+
+// --- WiFi watchdog ---
+
+static const uint32_t WIFI_RETRY_MS = 15000;          // reconnect() cadence
+static const uint32_t WIFI_FULL_RESTART_MS = 120000;  // then disconnect+begin
+static const uint32_t WIFI_REBOOT_MS = 10UL * 60000UL; // last resort
+
+bool NetworkManager::maintainWiFi() {
+  static uint32_t lostAt = 0;
+  static uint32_t lastAttempt = 0;
+  uint32_t now = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (lostAt) {
+      Serial.printf("WIFI: back after %us (%s)\n", (now - lostAt) / 1000,
+                    WiFi.localIP().toString().c_str());
+      lostAt = 0;
+    }
+    return true;
+  }
+
+  if (!lostAt) {
+    lostAt = now ? now : 1;
+    lastAttempt = lostAt;
+    Serial.printf("WIFI: lost (%s), reconnecting...\n",
+                  SystemMonitor::lastDisconnectReason());
+    return false;
+  }
+
+  uint32_t down = now - lostAt;
+  if (down >= WIFI_REBOOT_MS) {
+    Serial.println("WIFI: offline for 10 min, restarting");
+    if (statusCallback)
+      statusCallback("No WiFi for 10 minutes\n\nRestarting...");
+    delay(1500); // Let the GUI show the message
+    ESP.restart();
+  }
+  if (now - lastAttempt >= WIFI_RETRY_MS) {
+    lastAttempt = now;
+    if (down >= WIFI_FULL_RESTART_MS) {
+      Serial.printf("WIFI: still offline after %us, restarting the "
+                    "connection\n",
+                    down / 1000);
+      WiFi.disconnect(); // Keeps the saved credentials
+      WiFi.begin();      // Reconnects with them
+    } else {
+      Serial.println("WIFI: reconnect attempt");
+      WiFi.reconnect();
+    }
+  }
+  return false;
+}
 
 void NetworkManager::handleClient() {
   server.handleClient();
@@ -391,18 +444,22 @@ void NetworkManager::handleRoot() {
 
   // Device health (same figures as the "MON:" serial log lines)
   SystemMonitor::Stats st = SystemMonitor::read();
-  char status[420];
+  char status[640];
   snprintf(status, sizeof(status),
            "<section><h2>Status</h2><dl>"
            "<dt>Firmware</dt><dd>%s %s</dd>"
            "<dt>Uptime</dt><dd>%s</dd>"
-           "<dt>WiFi</dt><dd>%d dBm</dd>"
+           "<dt>Last reset</dt><dd>%s</dd>"
+           "<dt>WiFi</dt><dd>%d dBm, %u drops since boot (last: %s)</dd>"
            "<dt>Heap</dt><dd>%u KB free, %u KB min, %u KB largest</dd>"
            "<dt>Stack free</dt><dd>loop %d, net %d bytes</dd>"
            "</dl></section>",
            __DATE__, __TIME__, SystemMonitor::formatUptime(st.uptimeS).c_str(),
-           st.rssi, st.heapFree / 1024, st.heapMinFree / 1024,
-           st.heapLargest / 1024, st.loopStackFree, st.netStackFree);
+           SystemMonitor::resetReason(), st.rssi,
+           SystemMonitor::wifiDisconnects(),
+           SystemMonitor::lastDisconnectReason(), st.heapFree / 1024,
+           st.heapMinFree / 1024, st.heapLargest / 1024, st.loopStackFree,
+           st.netStackFree);
   page.add(status);
 
   page.add(PAGE_TAIL);
@@ -557,12 +614,19 @@ void NetworkManager::begin() {
   // Set timeout
   wm.setConfigPortalTimeout(180);
 
+  // Count disconnects and remember why (status page, overlay, MON lines)
+  SystemMonitor::begin();
+
   Serial.println("NETWORK: Attempting AutoConnect...");
   if (!wm.autoConnect("WeatherClockAP")) {
     Serial.println("NETWORK: Failed to connect and hit timeout");
     ESP.restart();
   }
   Serial.println("NETWORK: WiFi Connected!");
+  // Modem power save makes some routers drop the station; the clock is
+  // mains powered, so stay fully awake
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
 
   // Init NTP with the configured POSIX time zone
   configTzTime(timezone.c_str(), "pool.ntp.org");
@@ -593,6 +657,8 @@ void NetworkManager::begin() {
 
   // Start Web Server
   server.on("/", handleRoot);
+  // Browsers ask for this; without a handler every page load logs an error
+  server.on("/favicon.ico", []() { server.send(204); });
   server.on("/save", HTTP_POST, handleSave);
   server.onNotFound(
       []() { server.send(404, "text/plain", "Not Found"); }); // Catch-all

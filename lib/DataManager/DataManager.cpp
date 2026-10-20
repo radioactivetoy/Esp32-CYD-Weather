@@ -356,10 +356,26 @@ void DataManager::networkTask(void *parameter) {
   bool requestedOnce = false;
 
   // --- MAIN LOOP ---
+  bool wasOffline = false;
+
   for (;;) {
     esp_task_wdt_reset();
     NetworkManager::handleClient();
     uint32_t now = millis();
+
+    // WiFi: keep reconnecting. While offline, make no requests (so failures
+    // don't pile up backoff); once back, everything stale refreshes.
+    bool online = NetworkManager::maintainWiFi();
+    if (!online) {
+      wasOffline = true;
+    } else if (wasOffline) {
+      wasOffline = false;
+      for (auto &c : cityCaches)
+        c.failCount = 0;
+      for (auto &b : busCaches)
+        b.failCount = 0;
+      Serial.println("NETWORK: back online, refreshing stale data");
+    }
 
     if (ESP.getFreeHeap() < 65000) {
       Serial.printf("NETWORK: low heap %d, delaying updates\n",
@@ -403,7 +419,8 @@ void DataManager::networkTask(void *parameter) {
     }
 
     // 2. At most one network request per MIN_REQUEST_GAP_MS.
-    if (!requestedOnce || now - lastRequestMs >= MIN_REQUEST_GAP_MS) {
+    if (online &&
+        (!requestedOnce || now - lastRequestMs >= MIN_REQUEST_GAP_MS)) {
       bool requested = true;
       int idx;
       if (priorityCity >= 0) {

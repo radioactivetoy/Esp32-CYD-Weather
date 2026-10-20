@@ -815,6 +815,11 @@ static void onHeaderLongPress(lv_event_t *e) {
   addLine("    weatherclock.local", 0xCCCCCC);
   snprintf(buf, sizeof(buf), "Up: %s", SystemMonitor::formatUptime(st.uptimeS).c_str());
   addLine(buf, 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "Reset: %s", SystemMonitor::resetReason());
+  addLine(buf, 0xCCCCCC);
+  snprintf(buf, sizeof(buf), "WiFi drops: %u",
+           SystemMonitor::wifiDisconnects());
+  addLine(buf, 0xCCCCCC);
   snprintf(buf, sizeof(buf), "Heap: %u KB (min %u KB)", st.heapFree / 1024,
            st.heapMinFree / 1024);
   addLine(buf, 0xCCCCCC);
