@@ -263,10 +263,13 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
   } else if (forecastMode == 0) {
     // === CURRENT WEATHER: hero (icon + big temperature) over a details grid
 
-    // Hero: icon + text column (temperature, description, H/L) as one group,
-    // aligned to the grid's left edge, with the icon centred on the column's
-    // height. (Centring the group on the screen left a wider margin on the
-    // left than the grid below, so the icon looked pushed to the right.)
+    // Two columns shared by the hero and the details grid, placed so the
+    // left and right margins come out about equal (~20px)
+    const lv_coord_t colA = 20, colB = 130;
+
+    // Hero: icon in the left column, temperature / description / H/L in the
+    // right column (lined up with the grid's right-hand labels); the icon is
+    // centred on the text column's height
     auto plainBox = [](lv_obj_t *parent) {
       lv_obj_t *o = lv_obj_create(parent);
       lv_obj_remove_style_all(o); // No padding, border or background
@@ -280,10 +283,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_flex_flow(hero, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(hero, 10, 0);
-    // The icon image has ~3px of margin, so its artwork starts at ~x=14,
-    // like the grid labels
-    lv_obj_set_style_pad_left(hero, Theme::SIDE, 0);
+    // Icon box 68px holds the 64px image with ~3px of transparent margin:
+    // start it 5px early so the artwork lines up with colA, and gap it so the
+    // text column starts exactly at colB
+    lv_obj_set_style_pad_left(hero, colA - 5, 0);
+    lv_obj_set_style_pad_column(hero, colB - (colA - 5 + 68), 0);
 
     // Shown 1:1 (sharp): the icons are cropped so the artwork fills its
     // 64px image (tools/convert_meteocons.py)
@@ -312,17 +316,19 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       Theme::label(temp_row, diff > 0 ? LV_SYMBOL_UP : LV_SYMBOL_DOWN,
                    &lv_font_montserrat_14, diff > 0 ? 0xFF7755 : 0x6688FF);
 
-    Theme::label(col, getWeatherDesc(data.currentWeatherCode), &Theme::body,
-                 Theme::TEXT);
+    lv_obj_t *desc = Theme::label(col, getWeatherDesc(data.currentWeatherCode),
+                                  &Theme::body, Theme::TEXT);
+    // Long ones ("Freezing drizzle") scroll inside the column
+    lv_obj_set_width(desc, 240 - colB - 8);
+    lv_label_set_long_mode(desc, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
     snprintf(buf, sizeof(buf), "H %.0f\xC2\xB0  \xC2\xB7  L %.0f\xC2\xB0",
              data.daily[0].maxTemp, data.daily[0].minTemp);
     Theme::label(col, buf, &Fonts::text14, Theme::TEXT);
 
-    Theme::divider(bg_grad, 10, 148, 220);
+    Theme::divider(bg_grad, colA - 6, 148, 240 - 2 * (colA - 6));
 
     // Details grid: 2 columns x 4 rows of label / value
-    const lv_coord_t colA = 14, colB = 124;
     auto rowY = [](int r) -> lv_coord_t { return 156 + r * 40; };
 
     snprintf(buf, sizeof(buf), "%.0f\xC2\xB0", data.currentFeelsLike);
