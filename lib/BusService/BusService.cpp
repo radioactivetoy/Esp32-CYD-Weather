@@ -13,7 +13,7 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
 
   WiFiClientSecure client;
   client.setInsecure(); // Skip SSL verification
-  client.setHandshakeTimeout(10); // Seconds; default 120 exceeds the watchdog
+  client.setHandshakeTimeout(20); // Seconds; default 120 exceeds the 60s watchdog
 
   HTTPClient http;
 

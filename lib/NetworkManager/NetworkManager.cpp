@@ -613,6 +613,11 @@ void NetworkManager::begin() {
 
   // Set timeout
   wm.setConfigPortalTimeout(180);
+  // With saved credentials, one failed attempt (router busy, a transient
+  // AUTH_FAIL) must not drop straight into the setup portal: try several
+  // times, waiting up to 15s each, first.
+  wm.setConnectRetries(5);
+  wm.setConnectTimeout(15);
 
   // Count disconnects and remember why (status page, overlay, MON lines)
   SystemMonitor::begin();

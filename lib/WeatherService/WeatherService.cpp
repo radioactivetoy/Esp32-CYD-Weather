@@ -50,7 +50,7 @@ static bool httpsGet(HTTPClient &http, WiFiClientSecure &client,
   // watchdog before each one (no-op for tasks that are not subscribed)
   esp_task_wdt_reset();
   client.setInsecure();
-  client.setHandshakeTimeout(10); // Seconds; default 120 exceeds the watchdog
+  client.setHandshakeTimeout(20); // Seconds; default 120 exceeds the 60s watchdog
   if (!http.begin(client, url))
     return false;
   http.useHTTP10(true); // No chunked encoding: we parse straight from the stream

@@ -19,7 +19,7 @@ std::vector<StockItem> StockService::getQuotes(const String &symbols) {
 
     WiFiClientSecure client;
     client.setInsecure();
-    client.setHandshakeTimeout(10); // Seconds; default 120 exceeds the watchdog
+    client.setHandshakeTimeout(20); // Seconds; default 120 exceeds the 60s watchdog
     HTTPClient http;
     // https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d
     String url = "https://query1.finance.yahoo.com/v8/finance/chart/" +
