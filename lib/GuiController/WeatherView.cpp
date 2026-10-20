@@ -283,16 +283,18 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
     lv_obj_set_flex_flow(hero, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    // Icon box 68px holds the 64px image with ~3px of transparent margin:
-    // start it 5px early so the artwork lines up with colA, and gap it so the
-    // text column starts exactly at colB
-    lv_obj_set_style_pad_left(hero, colA - 5, 0);
-    lv_obj_set_style_pad_column(hero, colB - (colA - 5 + 68), 0);
+    // The icon is centred in the left column (colA .. colB - 10); left-
+    // aligning it there left a wide gap to the temperature and it looked
+    // pushed left. The text column starts exactly at colB.
+    const lv_coord_t iconBox = 68;
+    const lv_coord_t iconX = (colA + colB - 10) / 2 - iconBox / 2;
+    lv_obj_set_style_pad_left(hero, iconX, 0);
+    lv_obj_set_style_pad_column(hero, colB - (iconX + iconBox), 0);
 
     // Shown 1:1 (sharp): the icons are cropped so the artwork fills its
     // 64px image (tools/convert_meteocons.py)
     lv_obj_t *icon_wrap = plainBox(hero);
-    lv_obj_set_size(icon_wrap, 68, 68);
+    lv_obj_set_size(icon_wrap, iconBox, iconBox);
     createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
 
     lv_obj_t *col = plainBox(hero);
