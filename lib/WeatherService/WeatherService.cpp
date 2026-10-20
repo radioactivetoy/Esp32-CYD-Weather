@@ -44,6 +44,10 @@ static void toCityLocal(time_t utc, long offsetSec, struct tm &out) {
 }
 
 // Opens an HTTPS GET; returns true only on HTTP 200.
+// timeoutMs covers TCP connect and each read. With the 20s TLS cap a
+// request tops out around 2 x timeoutMs + 20s: < 45s even for the 12s OWM
+// forecast, under the 60s watchdog. Generous because at ~-70 dBm large
+// responses arrive slowly.
 static bool httpsGet(HTTPClient &http, WiFiClientSecure &client,
                      const String &url, uint16_t timeoutMs) {
   // A city refresh chains up to 5 requests; feed the network task's
@@ -138,7 +142,7 @@ bool WeatherService::lookupCoordinatesOWM(const String &cityName, float &lat,
 
   Serial.printf("Geocoding (OWM): %s\n", cityName.c_str());
   bool ok = false;
-  if (httpsGet(http, client, url, 5000)) {
+  if (httpsGet(http, client, url, 8000)) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
     // Expecting an array: [ { "name": ..., "lat": ..., "lon": ... } ]
@@ -184,7 +188,7 @@ bool WeatherService::lookupCoordinatesOpenMeteo(const String &cityName,
 
   Serial.printf("Geocoding (Open-Meteo): %s\n", cityName.c_str());
   bool ok = false;
-  if (httpsGet(http, client, url, 5000)) {
+  if (httpsGet(http, client, url, 8000)) {
     JsonDocument filter;
     filter["results"][0]["name"] = true;
     filter["results"][0]["latitude"] = true;
@@ -231,7 +235,7 @@ bool WeatherService::updateForecastOpenMeteo(WeatherData &data, float lat,
 
   Serial.println("Fetching Open-Meteo: " + url);
   bool ok = false;
-  if (httpsGet(http, client, url, 5000)) {
+  if (httpsGet(http, client, url, 8000)) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (error) {
@@ -329,7 +333,7 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
 
   Serial.printf("Fetching OWM Forecast 5Day: %.4f, %.4f\n", lat, lon);
   bool ok = false;
-  if (httpsGet(http, client, url, 6000)) {
+  if (httpsGet(http, client, url, 12000)) {
     // The full response is large; keep only the fields we use.
     JsonDocument filter;
     JsonObject f = filter["list"].add<JsonObject>();
@@ -461,7 +465,7 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
 
   Serial.printf("Fetching OWM Current: %.4f, %.4f\n", lat, lon);
   bool ok = false;
-  if (httpsGet(http, client, url, 5000)) {
+  if (httpsGet(http, client, url, 8000)) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (error) {
@@ -501,7 +505,7 @@ void WeatherService::supplementOpenMeteoDaily(WeatherData &data, float lat,
 
   Serial.printf("Fetching Open-Meteo daily supplement: %.4f, %.4f\n", lat,
                 lon);
-  if (httpsGet(http, client, url, 5000)) {
+  if (httpsGet(http, client, url, 8000)) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
     JsonObject daily = doc["daily"];
@@ -558,7 +562,7 @@ void WeatherService::updateAirQualityOWM(WeatherData &data, float lat,
                String(lat, 4) + "&lon=" + String(lon, 4) + "&appid=" + apiKey;
 
   Serial.printf("Fetching AQI OWM: %.4f, %.4f\n", lat, lon);
-  if (httpsGet(http, client, url, 5000)) {
+  if (httpsGet(http, client, url, 8000)) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (!error) {
