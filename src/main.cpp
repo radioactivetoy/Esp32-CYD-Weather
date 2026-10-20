@@ -9,12 +9,73 @@
 #include <TFT_eSPI.h>
 #include <lvgl.h>
 
+// --- BACKLIGHT / NIGHT MODE ---
+// This TN panel loses most of its contrast when dimmed, so the backlight is
+// only ever fully on or off. Night mode (optional, set in the web settings):
+// the screen is off between the configured hours; a tap turns it on for
+// WAKE_MS, and that first tap only wakes it (doesn't switch views or stops).
+static const uint32_t WAKE_MS = 30000;
+static bool screenOn = true; // tft.begin() switches the backlight on
+static bool nightNow = false;
+static uint32_t wakeUntil = 0;
+
+static void setScreen(bool on) {
+  if (on == screenOn)
+    return;
+  digitalWrite(TFT_BL, on ? TFT_BACKLIGHT_ON : !TFT_BACKLIGHT_ON);
+  screenOn = on;
+  Serial.printf("BACKLIGHT: %s\n", on ? "on" : "off");
+}
+
+// Inside the night window (handles windows across midnight, e.g. 22 -> 7)?
+static bool isNightTime() {
+  struct tm t;
+  if (!NetworkManager::getNightModeEnabled() || !getLocalTime(&t, 0))
+    return false; // Disabled, or no valid time yet: keep the screen on
+  int h = t.tm_hour;
+  int start = NetworkManager::getNightStart();
+  int end = NetworkManager::getNightEnd();
+  if (start == end)
+    return false;
+  return (start > end) ? (h >= start || h < end) : (h >= start && h < end);
+}
+
+// Called every loop: cheap except for the time check every 10s.
+static void updateBacklight() {
+  static uint32_t lastCheck = 0;
+  uint32_t now = millis();
+  if (lastCheck == 0 || now - lastCheck >= 10000) {
+    lastCheck = now ? now : 1;
+    nightNow = isNightTime();
+  }
+  bool awake = (int32_t)(wakeUntil - now) > 0;
+  setScreen(!nightNow || awake);
+}
+
 // --- TOUCH DRIVER (CST816S) ---
 TouchDrv touch;
 
 void my_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+  static bool swallowing = false; // The touch that woke the screen
   int16_t x, y;
-  if (touch.read(&x, &y)) {
+  bool pressed = touch.read(&x, &y);
+
+  if (pressed) {
+    if (!screenOn) {
+      // Screen off at night: this touch only wakes it
+      wakeUntil = millis() + WAKE_MS;
+      setScreen(true);
+      swallowing = true;
+    } else if (nightNow) {
+      wakeUntil = millis() + WAKE_MS; // Stay on while being used
+    }
+  }
+
+  if (swallowing) {
+    if (!pressed)
+      swallowing = false; // Lifted: the next touch acts normally
+    data->state = LV_INDEV_STATE_REL;
+  } else if (pressed) {
     data->state = LV_INDEV_STATE_PR;
     data->point.x = x;
     data->point.y = y;
@@ -22,46 +83,7 @@ void my_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     data->state = LV_INDEV_STATE_REL;
   }
   // Data refreshes wait while the screen is touched
-  GuiController::setTouchActive(data->state == LV_INDEV_STATE_PR);
-}
-
-// Time-Based Backlight Helper (Could move to Ledger or DataManager, but fine
-// here for now)
-void updateBacklight() {
-  static uint32_t last_check = 0;
-  static int current_pwm = -1;
-  const int DAY_PWM = 255;
-  const int NIGHT_PWM = 20;
-
-  if (millis() - last_check > 360000) {
-    last_check = millis();
-    struct tm timeinfo;
-    int target_pwm = DAY_PWM;
-
-    // Only apply logic if Night Mode is enabled and time is valid
-    if (NetworkManager::getNightModeEnabled() && getLocalTime(&timeinfo)) {
-      int h = timeinfo.tm_hour;
-      int start = NetworkManager::getNightStart();
-      int end = NetworkManager::getNightEnd();
-
-      bool isNight = false;
-      if (start > end) {
-        if (h >= start || h < end)
-          isNight = true;
-      } else {
-        if (h >= start && h < end)
-          isNight = true;
-      }
-
-      if (isNight)
-        target_pwm = NIGHT_PWM;
-    }
-
-    if (target_pwm != current_pwm) {
-      ledcWrite(0, target_pwm); // Pin 27
-      current_pwm = target_pwm;
-    }
-  }
+  GuiController::setTouchActive(pressed);
 }
 
 void setup() {
@@ -71,11 +93,8 @@ void setup() {
   // --- HARDWARE INIT ---
   touch.begin();
 
-  pinMode(34, INPUT);
-  ledcSetup(0, 5000, 8);
-  ledcAttachPin(27, 0);
-  Serial.println("LEDC Backlight Configured.");
-
+  // The backlight (TFT_BL) is switched on by tft.begin() inside init() and
+  // then only ever fully on or off (see updateBacklight)
   GuiController::init();
   LedController::begin();
 
@@ -139,13 +158,15 @@ void loop() {
   }
   wasBusActive = isBus;
 
-  // Clock & Backlight
+  // Clock
   static uint32_t lastTimeUpdate = 0;
   if (millis() - lastTimeUpdate > 10000) {
     lastTimeUpdate = millis();
     GuiController::updateTime();
-    updateBacklight();
   }
+
+  // Night mode: every pass, so a tap-to-wake timeout ends on time
+  updateBacklight();
 
   // Heap / stack health line every minute on the serial log
   SystemMonitor::logPeriodic();

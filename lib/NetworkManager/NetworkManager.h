@@ -36,8 +36,6 @@ public:
   static int getNightEnd();
   static String getOwmApiKey();
 
-  static int getDayBrightness();
-  static int getNightBrightness();
 
   static String getStockSymbols();
   static String getLedBrightness();
@@ -60,8 +58,6 @@ private:
   static int nightStart;
   static int nightEnd;
   static String owmApiKey;
-  static int dayBrightness;
-  static int nightBrightness;
   static String stockSymbols;
   static String ledBrightness;
   static String webPassword; // Optional HTTP basic auth for the settings page

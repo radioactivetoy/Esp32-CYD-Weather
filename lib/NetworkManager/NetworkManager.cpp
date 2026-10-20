@@ -19,8 +19,6 @@ String NetworkManager::timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
 bool NetworkManager::nightMode = false;
 int NetworkManager::nightStart = 22;
 int NetworkManager::nightEnd = 7;
-int NetworkManager::dayBrightness = 100;
-int NetworkManager::nightBrightness = 10;
 String NetworkManager::stockSymbols = "AAPL,BTC-USD,GRF.MC";
 String NetworkManager::ledBrightness = "medium";
 String NetworkManager::owmApiKey = "";
@@ -30,8 +28,6 @@ WebServer NetworkManager::server(80);
 
 String NetworkManager::getLedBrightness() { return ledBrightness; }
 String NetworkManager::getOwmApiKey() { return owmApiKey; }
-int NetworkManager::getDayBrightness() { return dayBrightness; }
-int NetworkManager::getNightBrightness() { return nightBrightness; }
 
 std::vector<String> NetworkManager::getBusStops() {
   std::vector<String> stops = NetUtils::splitList(busStop, ',', 5);
@@ -194,11 +190,9 @@ label{display:block;margin:14px 0 6px;color:#c8c8c8;font-size:14px}
 .hint{color:#9a9a9a;font-size:13px;margin-top:6px}
 input[type=text],input[type=password],input[type=number],select{width:100%;box-sizing:border-box;background:#111;color:#fff;border:1px solid #555;border-radius:10px;padding:11px 12px;font:inherit}
 input:focus,select:focus{outline:none;border-color:#44bbff}
-input[type=range]{width:100%;accent-color:#44bbff;margin:4px 0}
 .row{display:flex;gap:12px}.row>div{flex:1;min-width:0}
 .check{display:flex;align-items:center;gap:10px;margin-top:14px;color:#fff;font-size:16px}
 .check input{width:20px;height:20px;accent-color:#44bbff;margin:0}
-.val{float:right;color:#fff}
 dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:10px 0 0;font-size:14px}
 dt{color:#c8c8c8}dd{margin:0;font-variant-numeric:tabular-nums}
 .bar{position:fixed;left:0;right:0;bottom:0;background:#000;border-top:1px solid #666;padding:12px 16px}
@@ -209,13 +203,7 @@ dt{color:#c8c8c8}dd{margin:0;font-variant-numeric:tabular-nums}
 
 static const char PAGE_TAIL[] = R"HTML(</main>
 <div class="bar"><button type="submit" form="f">Save and restart</button></div>
-<script>
-document.querySelectorAll('input[type=range]').forEach(function(r){
-  var o=document.getElementById(r.name+'Val');
-  var u=function(){o.textContent=r.value+'%';};
-  r.addEventListener('input',u);u();
-});
-</script></body></html>)HTML";
+</body></html>)HTML";
 
 static const struct {
   const char *name;
@@ -353,19 +341,6 @@ void NetworkManager::handleRoot() {
     page.add(extra);
     page.add(">");
   };
-  auto slider = [&](const char *label, const char *name, int value) {
-    page.add("<label>");
-    page.add(label);
-    page.add("<span class=\"val\" id=\"");
-    page.add(name);
-    page.add("Val\"></span></label><input type=\"range\" min=\"1\" "
-             "max=\"100\" name=\"");
-    page.add(name);
-    page.add("\" value=\"");
-    page.add(String(value));
-    page.add("\">");
-  };
-
   section("Locations");
   input("Cities", "city", city, "text", "");
   hint("Up to 5, comma separated. To add a country code, separate with ; "
@@ -410,15 +385,16 @@ void NetworkManager::handleRoot() {
   page.add("<label class=\"check\"><input type=\"checkbox\" "
            "name=\"nightMode\"");
   page.add(nightMode ? " checked" : "");
-  page.add(">Dim the screen at night</label><div class=\"row\"><div>");
+  page.add(">Turn the screen off at night</label><div class=\"row\"><div>");
   input("From (hour)", "nightStart", String(nightStart), "number",
         "min=\"0\" max=\"23\" inputmode=\"numeric\"");
   page.add("</div><div>");
   input("Until (hour)", "nightEnd", String(nightEnd), "number",
         "min=\"0\" max=\"23\" inputmode=\"numeric\"");
   page.add("</div></div>");
-  slider("Day brightness", "dayBrightness", dayBrightness);
-  slider("Night brightness", "nightBrightness", nightBrightness);
+  hint("Tap the screen to turn it on for 30 seconds; that first tap only "
+       "wakes it. (The screen loses its contrast when dimmed, so it switches "
+       "off instead.)");
   page.add("</section>");
 
   section("API keys");
@@ -490,14 +466,8 @@ void NetworkManager::handleSave() {
     if (server.arg("timezone").length() > 0)
       timezone = server.arg("timezone");
     nightMode = server.hasArg("nightMode"); // Checkbox present = true
-    nightStart = server.arg("nightStart").toInt();
-    nightEnd = server.arg("nightEnd").toInt();
-
-    // Brightness Params (with safe parsing)
-    if (server.hasArg("dayBrightness"))
-      dayBrightness = server.arg("dayBrightness").toInt();
-    if (server.hasArg("nightBrightness"))
-      nightBrightness = server.arg("nightBrightness").toInt();
+    nightStart = constrain(server.arg("nightStart").toInt(), 0, 23);
+    nightEnd = constrain(server.arg("nightEnd").toInt(), 0, 23);
 
     prefs.begin("weather_cfg", false);
     prefs.putString("city", city);
@@ -512,8 +482,6 @@ void NetworkManager::handleSave() {
     prefs.putInt("nightStart", nightStart);
     prefs.putInt("nightEnd", nightEnd);
 
-    prefs.putInt("dayBrightness", dayBrightness);
-    prefs.putInt("nightBrightness", nightBrightness);
 
     // Stocks
     stockSymbols = server.arg("stockSymbols");
@@ -574,8 +542,6 @@ void NetworkManager::begin() {
   nightStart = prefs.getInt("nightStart", 22);
   nightEnd = prefs.getInt("nightEnd", 7);
 
-  dayBrightness = prefs.getInt("dayBrightness", 100);    // Default 100%
-  nightBrightness = prefs.getInt("nightBrightness", 10); // Default 10%
 
   // Load Stocks
   stockSymbols = prefs.getString("stockSymbols", "AAPL,BTC-USD,GRF.MC");

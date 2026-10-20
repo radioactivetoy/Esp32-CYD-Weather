@@ -36,7 +36,7 @@ The interface relies on intuitive **Touch Gestures**:
 4.  **Hardware Support**:
     *   **Display**: CYD (Cheap Yellow Display) - ESP32-2432S024C.
     *   **Touch**: CST816S Capacitive Touch (Gestures + Taps).
-    *   **Sensor**: LDR (Light Dependent Resistor) for Auto-Brightness.
+    *   **Night mode** (optional): Screen off between set hours; tap to wake it for 30 s.
 
 ## Credits
 
@@ -47,7 +47,7 @@ The interface relies on intuitive **Touch Gestures**:
 -   **Board**: ESP32-2432S024C (2.4" Touch Screen with CST820/CST816S).
     -   *Commonly known as the "Cheap Yellow Display" (CYD).*
 -   **Power**: USB-C or Micro-USB (depending on board variant).
--   **Sensors**: Built-in LDR (Light Sensor) and RGB LED.
+-   **Status LED**: Built-in RGB LED shows the rain outlook.
 
 ## Installation
 
@@ -87,9 +87,7 @@ No need to edit code! Configure everything via the web interface.
     -   **City & Bus Stop**: Set your location (comma-separated for multiple cities/stops, max 5 each). To add a country code, separate cities with `;` instead, e.g. `Paris,FR;London,GB`.
     -   **Stocks**: Comma-separated Yahoo Finance symbols (e.g., `AAPL,BTC-USD,GRF.MC`).
     -   **Lighting**:
-        -   **Day Brightness**: Slider (1-100%) for active hours.
-        -   **Night Brightness**: Slider (1-100%) for night mode.
-        -   **Night Mode**: Enable auto-dimming between specific hours.
+        -   **Night Mode** (optional): Turns the screen off between the set hours. A tap turns it on for 30 seconds; that first tap only wakes it.
     -   **Timezone**: Select your local time.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
     -   **API Keys**: Enter your TMB App ID/Key and (optionally) OpenWeatherMap API Key. Without an OWM key, weather comes from Open-Meteo and AQI is not shown.
@@ -110,7 +108,7 @@ No need to edit code! Configure everything via the web interface.
 -   **NVS Optimization**: Reduced flash memory wear by caching API credentials in RAM instead of reading NVS every 60 seconds.
 -   **OpenWeatherMap**: Preferred source for forecasts, geocoding and AQI when a key is configured; Open-Meteo is the keyless fallback.
 -   **Enhanced Rain UI**: Rain probability now displayed alongside weather description and in forecast lists.
--   **Configurable Backlight**: Set specific brightness levels for Day and Night modes via Web UI.
+-   **Night mode**: The screen switches off at night instead of dimming (the panel loses its contrast when dimmed); tap to wake.
 -   **Touch Navigation**: Simplified Bus Station switching via tap.
 
 ## API Keys
