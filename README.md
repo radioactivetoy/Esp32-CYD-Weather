@@ -20,12 +20,13 @@ The interface relies on intuitive **Touch Gestures**:
 
 1.  **Multi-City Weather**:
     *   **Source**: OpenWeatherMap (5-Day / 3-Hour Forecast API) when an OWM key is set; otherwise Open-Meteo (no key needed, hourly data). Failed fetches back off (30s up to 15 min) instead of retrying every second.
-    *   **Current**: "Glassmorphism" card (temperature colour-coded, feels like, high/low, sunrise/sunset) with pills for Humidity, Wind (colour by strength), UV Index and Air Quality.
-    *   **Rain Probability**: Shown in blue appended to description (e.g., "Overcast 30%") and in forecast lists.
+    *   **Current**: Big temperature (colour-coded) with the weather icon, description and high/low, over a grid of Feels like, Rain, Humidity, Wind, UV index (with level), Air quality, Sunrise and Sunset.
+    *   **Icons**: 21 [Meteocons](https://github.com/basmilius/weather-icons) with day/night variants, including sleet, hail and heavy rain. With OWM, the detailed condition codes are used so heavy rain, freezing rain and sleet are told apart.
+    *   **Rain Probability**: In the details grid and in the forecast lists.
     *   **Hourly**: Scrollable 12-row forecast: every 3 hours over the next 36h (OWM) or every 2 hours over 24h (Open-Meteo).
     *   **Daily**: 7-day forecast with high/low temps and mid-day icons. With OWM, today's full-day high/low, UV and the days beyond OWM's range come from one extra Open-Meteo request.
 2.  **TMB Bus Tracker**:
-    *   **Real-time Arrivals**: Shows minutes/seconds remaining.
+    *   **Real-time Arrivals**: Minutes to arrival, counting down between fetches; "Due" when the bus is arriving.
     *   **Instant Fetch**: Triggers fresh data immediately upon swiping to the screen or tapping to switch stations.
 
 3.  **Stock/Crypto Ticker**:
@@ -37,6 +38,11 @@ The interface relies on intuitive **Touch Gestures**:
     *   **Display**: CYD (Cheap Yellow Display) - ESP32-2432S024C.
     *   **Touch**: CST816S Capacitive Touch (Gestures + Taps).
     *   **Night mode** (optional): Screen off between set hours; tap to wake it for 30 s.
+
+5.  **Reliability**:
+    *   **WiFi recovery**: A lost connection is retried every 15 s, fully re-established after 2 minutes, and the clock restarts cleanly after 10 minutes offline. Nothing is fetched while offline; everything stale refreshes as soon as WiFi is back.
+    *   **No hangs**: Every request has connect, TLS and read timeouts that fit inside the network task's watchdog; failures back off (30 s up to 15 min) and weather falls back to Open-Meteo.
+    *   **Diagnostics**: The settings page Status section and the long-press info overlay show the last reset reason, WiFi drops with the last reason, memory and stack headroom. The serial log prints a `MON:` line every minute and `BOOT: last reset: ...` at startup.
 
 ## Credits
 
@@ -92,7 +98,7 @@ No need to edit code! Configure everything via the web interface.
     -   **LED Brightness**: Set RGB LED intensity (Low/Medium/High).
     -   **API Keys**: Enter your TMB App ID/Key and (optionally) OpenWeatherMap API Key. Without an OWM key, weather comes from Open-Meteo and AQI is not shown.
     -   **Settings & OTA Password** (optional, recommended): Protects this page (HTTP basic auth, user `admin`) and OTA updates. Can also be set in the first-time WiFi setup portal.
-    -   **Status**: the bottom of the page shows firmware build, uptime, WiFi signal, free memory and task stack headroom. The serial log prints the same as a `MON:` line every minute, with warnings when memory or stack runs low.
+    -   **Status**: the bottom of the page shows firmware build, uptime, last reset reason, WiFi signal and drops, free memory and task stack headroom. The serial log prints the same as a `MON:` line every minute, with warnings when memory or stack runs low.
 
 ## Controls
 -   **Swipe Up/Down**: Cycle between Apps (Weather <-> Bus <-> Stocks).
@@ -107,8 +113,11 @@ No need to edit code! Configure everything via the web interface.
 ## Recent Updates
 -   **NVS Optimization**: Reduced flash memory wear by caching API credentials in RAM instead of reading NVS every 60 seconds.
 -   **OpenWeatherMap**: Preferred source for forecasts, geocoding and AQI when a key is configured; Open-Meteo is the keyless fallback.
--   **Enhanced Rain UI**: Rain probability now displayed alongside weather description and in forecast lists.
+-   **Enhanced Rain UI**: Rain probability shown in the details grid and in the forecast lists.
 -   **Night mode**: The screen switches off at night instead of dimming (the panel loses its contrast when dimmed); tap to wake.
+-   **Redesign**: Black theme with hairline dividers, big temperature hero and a details grid; consistent header, lists and settings page.
+-   **Reliability**: WiFi auto-recovery, watchdog-safe network timeouts, reset and WiFi-drop diagnostics.
+-   **Icons**: Sharper Meteocons (cropped to fill the image, dithered), plus sleet, hail, heavy rain and night drizzle/showers.
 -   **Touch Navigation**: Simplified Bus Station switching via tap.
 
 ## API Keys
@@ -124,6 +133,9 @@ You need free API keys for data sources:
 -   `lib/NetworkManager`: WiFi, NTP, NVS Storage, and Web Server.
 -   `lib/BusService`: TMB API client.
 -   `lib/StockService`: Yahoo Finance client.
--   `lib/WeatherService`: OpenWeatherMap API client.
+-   `lib/WeatherService`: OpenWeatherMap and Open-Meteo client.
+-   `lib/DataManager`: Background network task: fetch scheduling, backoff, WiFi recovery.
+-   `lib/SystemMonitor`: Memory / stack monitoring, reset reason, WiFi drop counting.
 -   `lib/LedController`: RGB LED management and alerts.
 -   `lib/TouchDrv`: Driver for CST820/CST816S touch controller.
+-   `tools/convert_meteocons.py`: Regenerates the weather icons (`uv run --with pillow python tools/convert_meteocons.py`).
