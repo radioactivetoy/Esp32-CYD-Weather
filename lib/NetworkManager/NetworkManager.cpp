@@ -619,8 +619,6 @@ void NetworkManager::begin() {
   wm.setConnectRetries(5);
   wm.setConnectTimeout(15);
 
-  // Count disconnects and remember why (status page, overlay, MON lines)
-  SystemMonitor::begin();
 
   Serial.println("NETWORK: Attempting AutoConnect...");
   if (!wm.autoConnect("WeatherClockAP")) {
@@ -628,6 +626,10 @@ void NetworkManager::begin() {
     ESP.restart();
   }
   Serial.println("NETWORK: WiFi Connected!");
+  // Count disconnects and remember why (status page, overlay, MON lines).
+  // Registered only now: the connect sequence itself disconnects once to
+  // reset the link, which would otherwise show up as a drop.
+  SystemMonitor::begin();
   // Modem power save makes some routers drop the station; the clock is
   // mains powered, so stay fully awake
   WiFi.setSleep(false);
