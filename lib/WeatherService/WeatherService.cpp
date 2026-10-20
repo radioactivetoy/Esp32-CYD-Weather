@@ -29,6 +29,62 @@ static int owmIconToWmo(const char *icon) {
   return 3;
 }
 
+// OWM condition id (https://openweathermap.org/weather-conditions) to the
+// closest WMO code. Unlike the icon, the id tells heavy rain, freezing rain
+// and sleet apart. Falls back to the icon for unknown ids.
+static int owmConditionToWmo(int id, const char *icon) {
+  if (id >= 200 && id < 300)
+    return 95; // Thunderstorm (OWM doesn't report hail)
+  if (id >= 300 && id < 400)
+    return (id == 302 || id == 312 || id == 314) ? 55 : 51; // Drizzle
+  switch (id) {
+  case 500:
+    return 61; // Light rain
+  case 501:
+    return 63; // Moderate rain
+  case 502:
+  case 503:
+  case 504:
+    return 65; // Heavy / extreme rain
+  case 511:
+    return 66; // Freezing rain
+  case 520:
+  case 521:
+    return 80; // Showers
+  case 522:
+  case 531:
+    return 82; // Heavy / violent showers
+  case 600:
+    return 71; // Light snow
+  case 601:
+    return 73;
+  case 602:
+    return 75; // Heavy snow
+  case 611:
+  case 612:
+  case 613:
+  case 615:
+  case 616:
+    return 67; // Sleet, rain and snow
+  case 620:
+  case 621:
+  case 622:
+    return 85; // Snow showers
+  case 800:
+    return 0;
+  case 801:
+    return 1;
+  case 802:
+    return 2;
+  case 803:
+  case 804:
+    return 3;
+  }
+  if (id >= 700 && id < 800)
+    return 45; // Mist, fog, haze, ...
+  return owmIconToWmo(icon);
+}
+
 static bool isNightIcon(const char *icon) {
   size_t len = icon ? strlen(icon) : 0;
   return len > 0 && icon[len - 1] == 'n';
@@ -344,6 +400,7 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
     f["main"]["pressure"] = true;
     f["pop"] = true;
     f["weather"][0]["icon"] = true;
+    f["weather"][0]["id"] = true;
     f["wind"]["speed"] = true;
     f["wind"]["deg"] = true;
     filter["city"]["timezone"] = true;
@@ -388,7 +445,8 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
         data.hourly[i].temp = item["main"]["temp"];
         data.hourly[i].pop = item["pop"];
         const char *icon = item["weather"][0]["icon"] | "";
-        data.hourly[i].weatherCode = owmIconToWmo(icon);
+        data.hourly[i].weatherCode =
+            owmConditionToWmo(item["weather"][0]["id"] | 0, icon);
         data.hourly[i].isNight = isNightIcon(icon);
       }
       data.currentRainProb = data.hourly[0].pop;
@@ -403,7 +461,8 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
       data.currentPressure = first["main"]["pressure"];
       data.windSpeed = first["wind"]["speed"].as<float>() * 3.6f; // m/s->km/h
       data.windDirection = first["wind"]["deg"];
-      data.currentWeatherCode = owmIconToWmo(firstIcon);
+      data.currentWeatherCode =
+          owmConditionToWmo(first["weather"][0]["id"] | 0, firstIcon);
       data.isNight = isNightIcon(firstIcon);
 
       // 2. Daily aggregation by city-local date: min/max temp, max POP and
@@ -444,7 +503,8 @@ bool WeatherService::updateForecastOWM_5Day(WeatherData &data, float lat,
         int diff = abs(local.tm_hour - 12);
         if (diff < middayDiff) {
           middayDiff = diff;
-          d.weatherCode = owmIconToWmo(item["weather"][0]["icon"] | "");
+          d.weatherCode = owmConditionToWmo(item["weather"][0]["id"] | 0,
+                                            item["weather"][0]["icon"] | "");
         }
       }
       Serial.println("OWM Forecast 5Day Success");
@@ -481,7 +541,8 @@ bool WeatherService::updateCurrentWeatherOWM(WeatherData &data, float lat,
 
       const char *icon = doc["weather"][0]["icon"] | "";
       data.isNight = isNightIcon(icon);
-      data.currentWeatherCode = owmIconToWmo(icon);
+      data.currentWeatherCode =
+          owmConditionToWmo(doc["weather"][0]["id"] | 0, icon);
       Serial.printf("OWM Update Success: Temp=%.1f Icon=%s WMO=%d\n",
                     data.currentTemp, icon, data.currentWeatherCode);
       ok = true;

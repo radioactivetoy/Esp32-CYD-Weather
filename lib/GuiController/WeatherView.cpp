@@ -48,22 +48,38 @@ const char *WeatherView::getWeatherDesc(int code) {
   case 53:
   case 55:
     return "Drizzle";
+  case 56:
+  case 57:
+    return "Freezing drizzle";
   case 61:
   case 63:
-  case 65:
     return "Rain";
+  case 65:
+    return "Heavy rain";
+  case 66:
+    return "Freezing rain";
+  case 67:
+    return "Sleet";
   case 71:
   case 73:
-  case 75:
     return "Snow";
+  case 75:
+    return "Heavy snow";
+  case 77:
+    return "Snow grains";
   case 80:
   case 81:
+    return "Showers";
   case 82:
-    return "Rain Showers";
+    return "Heavy showers";
+  case 85:
+  case 86:
+    return "Snow showers";
   case 95:
+    return "Thunderstorm";
   case 96:
   case 99:
-    return "Thunderstorm";
+    return "Hailstorm";
   default:
     return "Unknown";
   }
@@ -71,35 +87,36 @@ const char *WeatherView::getWeatherDesc(int code) {
 
 lv_obj_t *WeatherView::createWeatherIcon(lv_obj_t *parent, int code,
                                          bool isNight) {
-  // Full-colour Meteocons (alpha images), so no recolouring. Drizzle and
-  // showers have no night variant.
+  // Full-colour Meteocons (alpha images), so no recolouring. WMO codes; OWM
+  // conditions are mapped to these in WeatherService.
+  auto pick = [isNight](const lv_img_dsc_t &day, const lv_img_dsc_t &night) {
+    return isNight ? (const void *)&night : (const void *)&day;
+  };
   const void *src = &weather_icon_cloud; // Unknown codes (-1)
-  if (code == 0) {
-    src = isNight ? (const void *)&weather_icon_moon
-                  : (const void *)&weather_icon_sun;
-  } else if (code == 1 || code == 2) {
-    src = isNight ? (const void *)&weather_icon_night_part_cloud
-                  : (const void *)&weather_icon_part_cloud;
-  } else if (code == 3) {
-    src = isNight ? (const void *)&weather_icon_cloud_night
-                  : (const void *)&weather_icon_cloud;
-  } else if (code == 45 || code == 48) {
-    src = isNight ? (const void *)&weather_icon_fog_night
-                  : (const void *)&weather_icon_fog;
-  } else if (code >= 51 && code <= 55) {
-    src = &weather_icon_drizzle;
-  } else if (code >= 61 && code <= 67) {
-    src = isNight ? (const void *)&weather_icon_rain_night
-                  : (const void *)&weather_icon_rain;
-  } else if ((code >= 71 && code <= 77) || code == 85 || code == 86) {
-    src = isNight ? (const void *)&weather_icon_snow_night
-                  : (const void *)&weather_icon_snow;
-  } else if (code >= 80 && code <= 82) {
-    src = &weather_icon_showers;
-  } else if (code >= 95) {
-    src = isNight ? (const void *)&weather_icon_thunder_night
-                  : (const void *)&weather_icon_thunder;
-  }
+  if (code == 0)
+    src = pick(weather_icon_sun, weather_icon_moon);
+  else if (code == 1 || code == 2)
+    src = pick(weather_icon_part_cloud, weather_icon_night_part_cloud);
+  else if (code == 3)
+    src = pick(weather_icon_cloud, weather_icon_cloud_night);
+  else if (code == 45 || code == 48)
+    src = pick(weather_icon_fog, weather_icon_fog_night);
+  else if (code >= 51 && code <= 55)
+    src = pick(weather_icon_drizzle, weather_icon_drizzle_night);
+  else if (code == 56 || code == 57 || code == 66 || code == 67)
+    src = &weather_icon_sleet; // Freezing drizzle / rain, sleet
+  else if (code == 65 || code == 82)
+    src = &weather_icon_extreme_rain; // Heavy rain, violent showers
+  else if (code >= 61 && code <= 64)
+    src = pick(weather_icon_rain, weather_icon_rain_night);
+  else if ((code >= 71 && code <= 77) || code == 85 || code == 86)
+    src = pick(weather_icon_snow, weather_icon_snow_night);
+  else if (code == 80 || code == 81)
+    src = pick(weather_icon_showers, weather_icon_showers_night);
+  else if (code == 96 || code == 99)
+    src = &weather_icon_hail; // Thunderstorm with hail
+  else if (code >= 95)
+    src = pick(weather_icon_thunder, weather_icon_thunder_night);
 
   lv_obj_t *img = lv_img_create(parent);
   lv_img_set_src(img, src);

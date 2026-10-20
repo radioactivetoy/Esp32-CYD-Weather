@@ -43,6 +43,11 @@ ICONS = {
     "weather_icon_rain_night": "overcast-night-rain",
     "weather_icon_snow_night": "overcast-night-snow",
     "weather_icon_thunder_night": "thunderstorms-night",
+    "weather_icon_drizzle_night": "overcast-night-drizzle",
+    "weather_icon_showers_night": "partly-cloudy-night-rain",
+    "weather_icon_sleet": "sleet",
+    "weather_icon_hail": "hail",
+    "weather_icon_extreme_rain": "extreme-rain",
 }
 
 # Night icons drawn much smaller than their day counterparts (moon vs sun

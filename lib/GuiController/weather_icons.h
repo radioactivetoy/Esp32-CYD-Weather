@@ -18,3 +18,8 @@ LV_IMG_DECLARE(weather_icon_fog_night);
 LV_IMG_DECLARE(weather_icon_rain_night);
 LV_IMG_DECLARE(weather_icon_snow_night);
 LV_IMG_DECLARE(weather_icon_thunder_night);
+LV_IMG_DECLARE(weather_icon_drizzle_night);
+LV_IMG_DECLARE(weather_icon_showers_night);
+LV_IMG_DECLARE(weather_icon_sleet);
+LV_IMG_DECLARE(weather_icon_hail);
+LV_IMG_DECLARE(weather_icon_extreme_rain);
