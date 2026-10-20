@@ -127,8 +127,8 @@ static void initListStyles() {
     return;
   done = true;
 
-  // Meteocons fill ~70% of their box: 64px zoomed to 44px, clipped to the
-  // 36px row height only through its transparent margin
+  // Icons are cropped so the artwork fills the 64px image (see
+  // tools/convert_meteocons.py): zoomed to 40px it fits the 36px rows
   lv_style_init(&styleIconBox);
   lv_style_set_width(&styleIconBox, 40);
   lv_style_set_height(&styleIconBox, 36);
@@ -263,13 +263,11 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(hero, 10, 0);
 
-    // Meteocons fill only ~45 of their 64px; scale 1.25x so the icon holds
-    // its own next to the big digits
+    // Shown 1:1 (sharp): the icons are cropped so the artwork fills its
+    // 64px image (tools/convert_meteocons.py)
     lv_obj_t *icon_wrap = plainBox(hero);
-    lv_obj_set_size(icon_wrap, 84, 84);
-    lv_obj_t *hero_icon =
-        createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
-    lv_img_set_zoom(hero_icon, 320);
+    lv_obj_set_size(icon_wrap, 68, 68);
+    createWeatherIcon(icon_wrap, data.currentWeatherCode, data.isNight);
 
     lv_obj_t *col = plainBox(hero);
     lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -398,7 +396,7 @@ void WeatherView::show(const WeatherData &data, int anim, int forecastMode) {
       lv_obj_t *box = Theme::plainBox(row);
       lv_obj_add_style(box, &styleIconBox, 0);
       lv_obj_t *icon = createWeatherIcon(box, code, night);
-      lv_img_set_zoom(icon, 176); // 64px -> 44px
+      lv_img_set_zoom(icon, 160); // 64px -> 40px, artwork fits 36px rows
     };
 
     int count = isHourly ? 12 : days;
