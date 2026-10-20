@@ -27,8 +27,8 @@ std::vector<StockItem> StockService::getQuotes(const String &symbols) {
 
     http.begin(client, url);
     http.useHTTP10(true); // No chunked encoding: we parse from the stream
-    http.setConnectTimeout(5000);
-    http.setTimeout(5000);
+    http.setConnectTimeout(8000); // Generous for weak WiFi (~-70 dBm)
+    http.setTimeout(8000);
     http.setUserAgent("Mozilla/5.0 (esp32)"); // Yahoo blocks generic agents
     int httpCode = http.GET();
 

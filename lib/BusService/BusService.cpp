@@ -24,8 +24,8 @@ bool BusService::updateBusTimes(BusData &data, String stopCode, String appId,
   // Serial.println("Fetching Combined Bus Data: " + url);
   http.begin(client, url);
   http.useHTTP10(true);
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(8000); // Generous for weak WiFi (~-70 dBm)
+  http.setTimeout(8000); // A slow response otherwise ends as IncompleteInput
 
   int httpResponseCode = http.GET();
   if (httpResponseCode == HTTP_CODE_OK) {
